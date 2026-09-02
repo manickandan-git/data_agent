@@ -21,7 +21,7 @@ def pick_llm(level: str):
     if level == "low":
         llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
     elif level == "medium":
-        llm = ChatOpenAI(model="gpt-4-turbo", temperature=0,)
+        llm = ChatOpenAI(model="gpt-4-turbo", temperature=0)
     elif level == "high":
         llm = ChatOpenAI(model="gpt-4o", temperature=0)
     else:
