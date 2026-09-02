@@ -146,12 +146,16 @@ def is_safe_sql(state: AgentSchema) -> AgentSchema:
     llm_judge = llm.with_structured_output(JudgeSchema)
 
     prompt = f"""
-    You are an SQL Judge for data security. Your task is to determine whether the SQL query is
-    safe or not. The SQL query should only be used for data retrieval and should not modify the
-    database in any way. Neither the SQL query nor the prompt should contain any SQL commands that can modify the
-    database, such as INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, CREATE, or any other commands that can change
-    the structure or content of the database. If the SQL query is safe, respond with 'Yes' otherwise respond with
-    'No'. Additionally, provide comments explaining your decision.
+    You are an SQL Judge for data security and relevance. Your task is to determine two things:
+    1. Is the SQL query safe? (only for data retrieval, no INSERT, UPDATE, DELETE, etc.)
+    2. Does the SQL query actually answer the user's question?
+
+    If the query doesn't match the user's question (e.g., user asks about plants but query selects cars),
+    respond with 'No' and explain that the requested data is not available in the database.
+
+    If the SQL query is safe AND relevant, respond with 'Yes' otherwise respond with 'No'.
+
+    User's Question: {state.curated_question}
     Here's the SQL query to evaluate:
     {sql_query}"""
 
@@ -309,7 +313,7 @@ if __name__ == "__main__":
 
     input_schema = {
         "messages": [],
-        "user_question": "What are the different types of vehicle makes we have in our database",
+        "user_question": "What are the different types of vechicle types we have in our database",
         "curated_question": "",
         "prompt_query_context": "",
         "generated_sql_query": "",
@@ -330,7 +334,12 @@ if __name__ == "__main__":
 
     print(" result of SQL query execution ********************************")
 
-    print(sql_analyst_response['sql_query_execution_result'])  # Print the result of executing the SQL query
+    """if is not relevant, the SQL query might not return the expected results, but can we ask the user to clarify or rephrase their question?"""
+    if sql_analyst_response['is_safe'] == "No":
+        print("The SQL query is either unsafe or not relevant to the user's question.")
+    else:
+        print("The SQL query is safe and relevant to the user's question.")
+        print(sql_analyst_response['sql_query_execution_result'])  # Print the result of executing the SQL query
 
     #print("prompt_query_context ********************************")
 
