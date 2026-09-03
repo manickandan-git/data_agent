@@ -1,1 +1,180 @@
-Generic single-database configuration.
+# Database Migrations
+
+This directory contains database schema migrations managed by [Alembic](https://alembic.sqlalchemy.org/), a lightweight database migration tool for SQLAlchemy.
+
+## Overview
+
+Alembic handles database schema versioning and evolution. Each migration is timestamped and tracks the changes made to the database schema over time.
+
+## File Structure
+
+- **env.py** - Migration environment configuration and runtime settings
+- **script.py.mako** - Template file used to generate new migration scripts
+- **versions/** - Directory containing all migration files
+
+## Migration Files
+
+### Current Migrations
+
+1. **c8e2638fcf8a_create_ride_sharing_tables.py**
+   - Creates the initial database schema
+   - Sets up tables: users, vehicles, rides, payments, ratings
+   - Establishes foreign key relationships
+
+2. **a86b191887cf_insert_csv_data_for_all_tables.py**
+   - Populates initial data from CSV files
+   - Seeds test/demo data into all tables
+   - Runs after schema creation
+
+## Common Tasks
+
+### Check Current Database State
+
+```bash
+alembic current
+```
+
+### Apply All Pending Migrations
+
+```bash
+alembic upgrade head
+```
+
+### Apply Migrations Up to Specific Version
+
+```bash
+alembic upgrade <revision_id>
+```
+
+### Rollback One Migration
+
+```bash
+alembic downgrade -1
+```
+
+### Rollback to Specific Version
+
+```bash
+alembic downgrade <revision_id>
+```
+
+### View Migration History
+
+```bash
+alembic history
+```
+
+### View Detailed Migration Information
+
+```bash
+alembic current -v
+```
+
+## Creating New Migrations
+
+### Auto-generate Migration from Model Changes
+
+```bash
+alembic revision --autogenerate -m "Description of changes"
+```
+
+### Create Empty Migration for Manual Setup
+
+```bash
+alembic revision -m "Custom migration description"
+```
+
+## Migration Best Practices
+
+1. **Descriptive Messages** - Always use clear, descriptive revision messages
+   ```bash
+   alembic revision --autogenerate -m "Add email_verified column to users table"
+   ```
+
+2. **Test Before Deploying** - Test migrations on a development database first
+   ```bash
+   # Apply migration
+   alembic upgrade head
+   # Verify changes
+   # Rollback to test downgrade
+   alembic downgrade -1
+   ```
+
+3. **Review Generated Migrations** - Always review auto-generated migrations before applying
+   - Check that all changes are correct
+   - Add any missing operations
+   - Remove any unwanted changes
+
+4. **Keep Migrations Atomic** - Each migration should represent one logical change
+   - Don't combine multiple unrelated changes
+   - Easier to rollback if needed
+
+5. **Never Edit Applied Migrations** - Once applied to production, never modify a migration file
+   - Create a new migration to fix issues
+   - Keeps migration history consistent
+
+## Development Workflow
+
+### Step 1: Make Model Changes
+
+Edit your SQLAlchemy models in `models/` directory.
+
+### Step 2: Generate Migration
+
+```bash
+alembic revision --autogenerate -m "Your change description"
+```
+
+### Step 3: Review Generated Migration
+
+Check the new file in `versions/` to ensure it's correct.
+
+### Step 4: Test Migration
+
+```bash
+alembic upgrade head
+# Test your application with the new schema
+alembic downgrade -1
+# Verify rollback works
+alembic upgrade head
+```
+
+### Step 5: Commit and Deploy
+
+Commit the migration file and deploy with your code.
+
+## Troubleshooting
+
+### Migration Conflicts
+
+If migrations conflict (e.g., multiple developers creating migrations):
+1. Resolve conflicts manually by adjusting revision dependencies
+2. Use `alembic merge` to combine branches
+3. Always coordinate with team before deploying conflicting migrations
+
+### Rollback Issues
+
+If a rollback fails:
+1. Check the migration file for errors
+2. Manually fix the database if needed
+3. Update the Alembic version table to match actual state
+   ```bash
+   alembic stamp <revision_id>
+   ```
+
+### Connection Issues
+
+If you get database connection errors:
+1. Verify database is running
+2. Check `sqlalchemy.url` in `alembic.ini`
+3. Ensure credentials and permissions are correct
+
+## Database Connection
+
+Alembic reads the database connection string from configuration. The connection is typically defined in the environment or through Alembic's configuration file.
+
+## References
+
+- [Alembic Documentation](https://alembic.sqlalchemy.org/)
+- [SQLAlchemy Documentation](https://docs.sqlalchemy.org/)
+- [Migration Best Practices](https://alembic.sqlalchemy.org/en/latest/tutorial.html)
