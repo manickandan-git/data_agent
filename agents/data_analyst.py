@@ -9,15 +9,7 @@ from langgraph.graph import START, StateGraph
 from agents.etl_analyst import etl_analyst
 from agents.sql_analyst import sql_analyst
 from agentschemas import DataSchema, RouterSchema
-from utils.llm_pick import pick_llm
-
-llm = pick_llm("medium")
-
-llm_router = llm.with_structured_output(
-    RouterSchema,
-    method="function_calling",
-)
-
+from utils.llm_pick import structured_llm
 
 # ---------------------------- DATA AGENT GRAPH ---------------------------- #
 
@@ -26,7 +18,7 @@ def router_node(state:DataSchema):
 
     message = state.messages[-1].content
 
-    route_response_dict = llm_router.invoke(message).model_dump()
+    route_response_dict = structured_llm("medium", RouterSchema).invoke(message).model_dump()
 
     route_response = route_response_dict['answer']
 

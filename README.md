@@ -118,6 +118,49 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Configuration and LLM providers
+
+Copy `.env.example` to `.env` and supply only the selected provider's key.
+Configuration is loaded relative to the repository, independent of the working
+directory. Secrets are redacted in settings representations. Clients are created
+when workflows run, not when modules are imported.
+
+`LLM_PROVIDER=openai` uses `gpt-5.6-luna` for low,
+`gpt-5.6-terra` for medium, and `gpt-5.6-sol` for high. Override each with
+`LLM_MODEL_LOW`, `LLM_MODEL_MEDIUM`, and `LLM_MODEL_HIGH`.
+
+To use Anthropic, set `LLM_PROVIDER=anthropic`, supply `ANTHROPIC_API_KEY`, and
+set the three model settings to Anthropic model IDs available to your account.
+OpenAI credentials are not required for Anthropic. Selected models must support
+tool calling and structured outputs. No live provider calls are made by the tests.
+
+`LLM_TEMPERATURE`, `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES`, and `LLM_MAX_TOKENS`
+control model requests. `OPENAI_BASE_URL` optionally selects an OpenAI-compatible
+endpoint; use only a trusted endpoint, since it receives your key and prompts.
+Compatibility with third-party endpoints must be verified separately.
+
+`DATABASE_URL` is required only for database operations. `DATABASE_SCHEMA`,
+`SQL_ROW_LIMIT`, and `SQL_TIMEOUT_SECONDS` configure schema discovery, the prompted
+default row limit, and query timeout. The row limit is a generation instruction,
+not a database-enforced result cap. Migrations also read these settings; changing
+`DATABASE_SCHEMA` does not relocate the existing `public` ORM tables/migrations.
+
+Additional providers can register a `ProviderAdapter` with `register_provider`
+in `utils/llm_pick.py` before invoking a graph. The adapter builds a LangChain
+chat model and specifies any provider-specific structured-output method.
+Agent workflows do not need provider-specific edits. Settings are cached for the
+process; restart after editing `.env` or call `reset_llm_clients()` from
+`utils.llm_pick` to clear both settings and model clients.
+
+The default GPT-5.6 family uses the Responses API with explicit
+`OPENAI_REASONING_EFFORT=low` and omits temperature. Legacy/custom model overrides
+retain Chat Completions and temperature. Output is kept in LangChain's `v0`
+message format to preserve existing agent text/tool contracts. Model clients are
+reused by the default `LLMFactory`; tests can inject their own settings/factory.
+No automatic failover changes providers, endpoints, or model costs.
+Private `.env` model overrides take priority; clear them to adopt the new defaults.
+See [OpenAI migration guidance](https://developers.openai.com/api/docs/guides/latest-model).
+
 ### Basic Example
 
 ```python

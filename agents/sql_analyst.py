@@ -12,8 +12,9 @@ from langgraph.graph import END, START, StateGraph
 
 from agentschemas import AgentSchema
 from agentschemas.judge import JudgeSchema
+from config import get_config
 from utils.database import AsyncDatabaseUtil
-from utils.llm_pick import pick_llm
+from utils.llm_pick import pick_llm, structured_llm
 from utils.sql_safety import validate_read_only_sql
 
 
@@ -71,10 +72,10 @@ def curate_prompt_query_context(state:AgentSchema) -> AgentSchema:
     curated_question = state.curated_question
 
     async def _get_schema_info():
-        db_obj = AsyncDatabaseUtil(os.environ.get("DATABASE_URL"))
+        db_obj = AsyncDatabaseUtil(get_config().require_database_url())
         await db_obj.connect()
         try:
-            schema_info = await db_obj.schema_details("public")
+            schema_info = await db_obj.schema_details(get_config().database_schema)
             return schema_info
         finally:
             await db_obj.close()
@@ -87,7 +88,7 @@ def curate_prompt_query_context(state:AgentSchema) -> AgentSchema:
     with the user's original query and the schema details of the database, including
     table names, column names, data types, and sample data for each table so that
     you can understand the structure of the database and generate an accurate SQL query.
-    Unless user explicitly asks for specific number of rows, always limit the output to 10 rows.
+    Unless user explicitly asks for specific number of rows, always limit the output to {get_config().sql_row_limit} rows.
     Note - Just generate the SQL query without any explanation or additional text because
     this query will be executed directly on the database. So, the output should be SQL
     ready to be executed without any modifications.
@@ -149,11 +150,7 @@ def is_safe_sql(state: AgentSchema) -> AgentSchema:
         state.comments = safety_result.reason
         return state
 
-    llm = pick_llm("medium")
-    llm_judge = llm.with_structured_output(
-        JudgeSchema,
-        method="function_calling",
-    )
+    llm_judge = structured_llm("medium", JudgeSchema)
 
     prompt = f"""
     You are an SQL Judge for data security and relevance. Your task is to determine two things:
@@ -217,10 +214,12 @@ def execute_sql_query(state: AgentSchema) -> AgentSchema:
         return state
 
     async def _execute_query():
-        db_obj = AsyncDatabaseUtil(os.environ.get("DATABASE_URL"))
+        db_obj = AsyncDatabaseUtil(get_config().require_database_url())
         await db_obj.connect()
         try:
-            result = await db_obj.execute_read_only_sql(sql_query)
+            result = await db_obj.execute_read_only_sql(
+                sql_query, timeout=get_config().sql_timeout_seconds,
+            )
             return result
         finally:
             await db_obj.close()

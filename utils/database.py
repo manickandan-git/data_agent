@@ -1,8 +1,9 @@
 import asyncio
-import os
 
 import aiofiles
 import asyncpg
+
+from config import get_config
 
 
 class AsyncDatabaseUtil:
@@ -128,14 +129,14 @@ class AsyncDatabaseUtil:
 # --- Execution Wrapper ---
 async def main():
     # Replace with your actual Postgres credentials connection string
-    DATABASE_URL = os.environ.get("DATABASE_URL")
+    DATABASE_URL = get_config().require_database_url()
 
     # Initialize the utility class
     obj = AsyncDatabaseUtil(DATABASE_URL)
     await obj.connect()
 
     # 1. Fetch schema details asynchronously
-    result = await obj.schema_details("public")
+    result = await obj.schema_details(get_config().database_schema)
 
     # 2. Write file asynchronously using aiofiles
     async with aiofiles.open("test_schema_details.txt", "w", encoding="utf-8") as f:

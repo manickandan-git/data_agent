@@ -9,7 +9,7 @@ from langgraph.graph import END, START, StateGraph
 
 from agentschemas import ETLSchema, TransformationPlan
 from utils.etl_tools import ETLTools
-from utils.llm_pick import pick_llm
+from utils.llm_pick import pick_llm, structured_llm
 
 
 @tool
@@ -56,10 +56,7 @@ def transform_load_tool(input_file_path:str,output_folder:str,output_format:str,
     except (OSError, ValueError) as error:
         return f"Transformation failed: {error}"
 
-    llm = pick_llm("medium").with_structured_output(
-        TransformationPlan,
-        method="function_calling",
-    )
+    llm = structured_llm("medium", TransformationPlan)
 
     prompt = f"""
             Create a declarative transformation plan for the user's request.
@@ -91,8 +88,6 @@ def transform_load_tool(input_file_path:str,output_folder:str,output_format:str,
 # Toolkit 
 tools = [extract_load_tool, transform_load_tool]
 
-llm = pick_llm("medium")
-llm_bind = llm.bind_tools(tools)
 
 
 # ---------------------------------------- AGENT GRAPH ---------------------------------------- #
@@ -109,7 +104,7 @@ def llm_node(state:ETLSchema):
             Here's the chat history: {messages}\n
     """
 
-    final_answer = llm_bind.invoke(prompt)
+    final_answer = pick_llm("medium").bind_tools(tools).invoke(prompt)
 
     state.messages = messages + [final_answer]
 

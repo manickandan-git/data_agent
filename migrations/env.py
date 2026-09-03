@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import Connection, pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from config import get_config
 from models.base import Base
 
 config = context.config
@@ -24,7 +24,8 @@ def get_database_url() -> str:
     DATABASE_URL takes precedence over sqlalchemy.url from alembic.ini.
     Percent signs are escaped because Alembic uses ConfigParser internally.
     """
-    database_url = os.getenv("DATABASE_URL")
+    secret_url = get_config().database_url
+    database_url = secret_url.get_secret_value() if secret_url else None
 
     if not database_url:
         database_url = config.get_main_option("sqlalchemy.url")
