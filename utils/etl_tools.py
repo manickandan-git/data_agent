@@ -1,5 +1,5 @@
 """ETL (Extract, Transform, Load) utility functions module."""
-import os
+from pathlib import Path
 
 import pandas as pd
 import requests
@@ -10,8 +10,42 @@ from agentschemas.transformation import FilterRule, TransformationPlan
 class ETLTools:
     """Utility functions for ETL (Extract, Transform, Load) operations."""
 
-    def __init__(self):
-        """Initialize the ETLTools class."""
+    def __init__(self, data_root: str | Path | None = None):
+        """Initialize ETL tools with an explicit filesystem boundary."""
+        project_root = Path(__file__).resolve().parents[1]
+        self.project_root = project_root
+        self.data_root = Path(data_root or project_root / "data").resolve()
+        self.extract_root = (self.data_root / "extract").resolve()
+        self.transform_root = (self.data_root / "transform").resolve()
+
+    def _resolve_allowed_path(
+        self,
+        path: str | Path,
+        allowed_root: Path,
+        *,
+        must_exist: bool = False,
+    ) -> Path:
+        candidate = Path(path)
+        if not candidate.is_absolute():
+            candidate = self.project_root / candidate
+
+        try:
+            resolved = candidate.resolve(strict=must_exist)
+        except FileNotFoundError as error:
+            raise ValueError(f"Path does not exist: {candidate}") from error
+
+        if not resolved.is_relative_to(allowed_root):
+            raise ValueError(
+                f"Path is outside the allowed directory '{allowed_root}': {resolved}"
+            )
+        return resolved
+
+    @staticmethod
+    def _ensure_new_output(output_file: Path) -> None:
+        if output_file.exists():
+            raise FileExistsError(
+                f"Refusing to overwrite existing output file: {output_file}"
+            )
 
     def extract_load(self, url:str, output_folder:str, format:str) -> str:  
         """
@@ -25,26 +59,31 @@ class ETLTools:
             str: A message indicating the success or failure of the operation.
         """
 
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-        output_folder=os.path.join(project_root, output_folder)
+        normalized_format = format.lower().lstrip(".")
+        if normalized_format not in {"csv", "json", "parquet"}:
+            return f"Unsupported format: {format}"
+
+        resolved_output_folder = self._resolve_allowed_path(
+            output_folder,
+            self.extract_root,
+        )
+        file_name = resolved_output_folder / f"extracted_data.{normalized_format}"
+        self._ensure_new_output(file_name)
 
         try:
             response = requests.get(url)
             response.raise_for_status()  # Raise an exception for HTTP errors
             data = response.json()
 
-            file_name = os.path.join(output_folder,f"extracted_data.{format}")
-            os.makedirs(output_folder, exist_ok=True)
+            resolved_output_folder.mkdir(parents=True, exist_ok=True)
 
             df = pd.json_normalize(data['results'])
-            if format == "csv":
+            if normalized_format == "csv":
                 df.to_csv(file_name, index=False)
-            elif format == "json":
+            elif normalized_format == "json":
                 df.to_json(file_name, orient="records", lines=True)
-            elif format == "parquet":
-                df.to_parquet(file_name, index=False)
             else:
-                return f"Unsupported format: {format}"
+                df.to_parquet(file_name, index=False)
 
             return f"Data successfully extracted from {url} and loaded into {file_name}."
         except requests.RequestException as e:
@@ -63,14 +102,22 @@ class ETLTools:
         Returns:
             str: A message indicating the success or failure of the operation.
         """
-        file_extension = os.path.splitext(file_path)[1].lower()
+        resolved_file = self._resolve_allowed_path(
+            file_path,
+            self.data_root,
+            must_exist=True,
+        )
+        if not resolved_file.is_file():
+            raise ValueError(f"Input path is not a file: {resolved_file}")
+
+        file_extension = resolved_file.suffix.lower()
 
         if file_extension == ".json":
-            df = pd.read_json(file_path, lines=True)
+            df = pd.read_json(resolved_file, lines=True)
         elif file_extension == ".csv":
-            df = pd.read_csv(file_path)
+            df = pd.read_csv(resolved_file)
         elif file_extension == ".parquet":
-            df = pd.read_parquet(file_path)
+            df = pd.read_parquet(resolved_file)
         else:
             return f"Unsupported file extension: {file_extension}"
 
@@ -136,13 +183,26 @@ class ETLTools:
         plan: TransformationPlan,
     ) -> str:
         """Apply a validated operation plan without executing generated code."""
-        extension = os.path.splitext(input_file_path)[1].lower()
+        resolved_input = self._resolve_allowed_path(
+            input_file_path,
+            self.data_root,
+            must_exist=True,
+        )
+        if not resolved_input.is_file():
+            raise ValueError(f"Input path is not a file: {resolved_input}")
+
+        resolved_output_folder = self._resolve_allowed_path(
+            output_folder,
+            self.transform_root,
+        )
+
+        extension = resolved_input.suffix.lower()
         if extension == ".csv":
-            df = pd.read_csv(input_file_path)
+            df = pd.read_csv(resolved_input)
         elif extension == ".json":
-            df = pd.read_json(input_file_path, lines=True)
+            df = pd.read_json(resolved_input, lines=True)
         elif extension == ".parquet":
-            df = pd.read_parquet(input_file_path)
+            df = pd.read_parquet(resolved_input)
         else:
             raise ValueError(f"Unsupported file extension: {extension}")
 
@@ -179,11 +239,9 @@ class ETLTools:
         if normalized_format not in {"csv", "json", "parquet"}:
             raise ValueError(f"Unsupported format: {output_format}")
 
-        os.makedirs(output_folder, exist_ok=True)
-        output_file = os.path.join(
-            output_folder,
-            f"transformed_data.{normalized_format}",
-        )
+        resolved_output_folder.mkdir(parents=True, exist_ok=True)
+        output_file = resolved_output_folder / f"transformed_data.{normalized_format}"
+        self._ensure_new_output(output_file)
         if normalized_format == "csv":
             df.to_csv(output_file, index=False)
         elif normalized_format == "json":

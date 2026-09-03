@@ -28,7 +28,10 @@ def extract_load_tool(url:str, output_folder:str, format:str) -> str:
 
     """
     etl_tools = ETLTools()
-    return etl_tools.extract_load(url, output_folder, format)
+    try:
+        return etl_tools.extract_load(url, output_folder, format)
+    except (OSError, ValueError) as error:
+        return f"Extraction failed: {error}"
 
 
 @tool
@@ -48,7 +51,10 @@ def transform_load_tool(input_file_path:str,output_folder:str,output_format:str,
     """
     etl_tools = ETLTools()
 
-    top_3_rows = etl_tools.transform_load_context(input_file_path)
+    try:
+        top_3_rows = etl_tools.transform_load_context(input_file_path)
+    except (OSError, ValueError) as error:
+        return f"Transformation failed: {error}"
 
     llm = pick_llm("medium").with_structured_output(
         TransformationPlan,
