@@ -13,7 +13,10 @@ from utils.llm_pick import pick_llm
 
 llm = pick_llm("medium")
 
-llm_router = llm.with_structured_output(RouterSchema)
+llm_router = llm.with_structured_output(
+    RouterSchema,
+    method="function_calling",
+)
 
 
 # ---------------------------- DATA AGENT GRAPH ---------------------------- #
@@ -91,16 +94,11 @@ data_agent_graph.add_conditional_edges("router_node", route_edge,
 
 data_analyst = data_agent_graph.compile()
 
-# Optional|
-from IPython.display import Image
-
-img = Image(data_analyst.get_graph().draw_mermaid_png())
-with open("data_agent_graph.png", "wb") as f:
-    f.write(img.data)
-
-
-
 if __name__ == "__main__":
+
+    graph_png = data_analyst.get_graph().draw_mermaid_png()
+    with open("data_agent_graph.png", "wb") as f:
+        f.write(graph_png)
 
     response = data_analyst.invoke(
         # for testing the ETL node

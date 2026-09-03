@@ -18,7 +18,10 @@ class Vehicle(Base):
     )
 
     vehicle_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    driver_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), nullable=False) # Implicitly targets public.users
+    driver_id: Mapped[int] = mapped_column(
+        ForeignKey("public.users.user_id"),
+        nullable=False,
+    )
     make: Mapped[str | None] = mapped_column(String(50), nullable=True)
     model: Mapped[str | None] = mapped_column(String(50), nullable=True)
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)

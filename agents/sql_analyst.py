@@ -143,7 +143,10 @@ def is_safe_sql(state: AgentSchema) -> AgentSchema:
     sql_query = clean_sql_query(state.generated_sql_query)
 
     llm = pick_llm("medium")
-    llm_judge = llm.with_structured_output(JudgeSchema)
+    llm_judge = llm.with_structured_output(
+        JudgeSchema,
+        method="function_calling",
+    )
 
     prompt = f"""
     You are an SQL Judge for data security and relevance. Your task is to determine two things:
