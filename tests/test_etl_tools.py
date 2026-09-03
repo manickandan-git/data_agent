@@ -1,8 +1,10 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 import requests
 
+from agentschemas import FilterRule, SortRule, TransformationPlan
 from utils.etl_tools import ETLTools
 
 
@@ -89,17 +91,64 @@ def test_transform_load_context_rejects_unknown_extension(tmp_path):
     )
 
 
-def test_execute_code_captures_output():
-    assert ETLTools().execute_code("print(sum([1, 2, 3]))") == "6\n"
+def test_transform_load_applies_validated_plan(tmp_path):
+    source = tmp_path / "source.csv"
+    output = tmp_path / "output"
+    pd.DataFrame(
+        {
+            "name": ["venusaur", "bulbasaur", "ivysaur", "bulbasaur"],
+            "score": [3, 1, 2, 1],
+        }
+    ).to_csv(source, index=False)
+    plan = TransformationPlan(
+        filters=[
+            FilterRule(
+                column="name",
+                operator="in",
+                value=["bulbasaur", "ivysaur"],
+            )
+        ],
+        select_columns=["name", "score"],
+        rename_columns={"score": "rank"},
+        drop_duplicates_on=["name"],
+        sort=[SortRule(column="rank", ascending=False)],
+        limit=2,
+    )
+
+    result = ETLTools().transform_load(str(source), str(output), "csv", plan)
+
+    transformed = pd.read_csv(output / "transformed_data.csv")
+    assert transformed.to_dict("records") == [
+        {"name": "ivysaur", "rank": 2},
+        {"name": "bulbasaur", "rank": 1},
+    ]
+    assert "Transformed 2 rows" in result
 
 
-def test_execute_code_blocks_unapproved_import():
-    result = ETLTools().execute_code("import subprocess")
+def test_transform_load_rejects_unknown_columns(tmp_path):
+    source = tmp_path / "source.csv"
+    pd.DataFrame({"name": ["bulbasaur"]}).to_csv(source, index=False)
+    plan = TransformationPlan(
+        filters=[FilterRule(column="password", operator="eq", value="secret")]
+    )
 
-    assert result.startswith("Failed to execute code: ImportError")
+    with pytest.raises(ValueError, match="Unknown columns"):
+        ETLTools().transform_load(str(source), str(tmp_path / "output"), "csv", plan)
 
 
-def test_execute_code_rejects_oversized_input():
-    result = ETLTools().execute_code("x" * 10001)
+def test_transformation_plan_rejects_unsupported_operations():
+    with pytest.raises(ValueError):
+        FilterRule(column="name", operator="execute_python", value="import os")
 
-    assert result == "Error: Code exceeds maximum length (10000 characters)"
+
+def test_string_filter_is_literal_not_regex(tmp_path):
+    source = tmp_path / "source.csv"
+    output = tmp_path / "output"
+    pd.DataFrame({"value": ["a.b", "axb"]}).to_csv(source, index=False)
+    plan = TransformationPlan(
+        filters=[FilterRule(column="value", operator="contains", value=".")]
+    )
+
+    ETLTools().transform_load(str(source), str(output), "csv", plan)
+
+    assert pd.read_csv(output / "transformed_data.csv")["value"].tolist() == ["a.b"]

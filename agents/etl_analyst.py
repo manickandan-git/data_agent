@@ -7,21 +7,9 @@ from langchain.tools import tool
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 
-from agentschemas import ETLSchema
+from agentschemas import ETLSchema, TransformationPlan
 from utils.etl_tools import ETLTools
 from utils.llm_pick import pick_llm
-
-
-def clean_code(code: str) -> str:
-    """Remove markdown code blocks from generated code."""
-    code = code.strip()
-    if code.startswith("```"):
-        if code.startswith("```python"):
-            code = code[9:]
-        elif code.startswith("```"):
-            code = code[3:]
-        code = code.removesuffix("```").strip()
-    return code
 
 
 @tool
@@ -62,32 +50,36 @@ def transform_load_tool(input_file_path:str,output_folder:str,output_format:str,
 
     top_3_rows = etl_tools.transform_load_context(input_file_path)
 
-    llm = pick_llm("medium")
+    llm = pick_llm("medium").with_structured_output(
+        TransformationPlan,
+        method="function_calling",
+    )
 
     prompt = f"""
-            You are a Python Data Analyst who uses Pandas to analyze data. 
-            You need to provide only the Pandas Code that will help to perform the right ETL operations on the data stored in the file : {input_file_path}
-            as per the user's question. Do not provide any explanation or comments, only
-            the code should be provided. The code should be in a format that can be executed 
-            in a Python environment with Pandas installed. 
-            Don't write anything else than Pandas Code. \n
-            
-            Create the Pandas Dataframe from the data stored in the file : {input_file_path} and then 
-            write the code to transform and save the data at {output_folder}.
+            Create a declarative transformation plan for the user's request.
+            Use only the operations supported by the TransformationPlan schema.
+            Never generate Python, shell commands, SQL, expressions, or file operations.
+            Column names must exactly match the supplied data context. Filters are
+            applied first, followed by selection, renaming, deduplication, sorting,
+            and the row limit.
             Here's the user's question: {user_question}\n
             Here's the context of the data you will be analyzing: {top_3_rows}\n
 
         """
 
-    response = llm.invoke(prompt).content
+    plan = llm.invoke(prompt)
 
-    # Clean markdown code blocks from response
-    pandas_code = clean_code(response)
+    try:
+        result = etl_tools.transform_load(
+            input_file_path,
+            output_folder,
+            output_format,
+            plan,
+        )
+    except (OSError, TypeError, ValueError) as error:
+        return f"Transformation failed: {error}"
 
-    # Execute the Pandas code
-    results = etl_tools.execute_code(pandas_code)
-
-    return f"The data is transformed and saved at {output_folder} in {output_format} format. \n\n Pandas Code Executed: \n {pandas_code} \n\n Execution Result: \n {results}"
+    return f"{result}\nTransformation plan: {plan.model_dump_json()}"
 
 
 # Toolkit 

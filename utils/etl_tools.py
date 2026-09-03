@@ -1,10 +1,10 @@
 """ETL (Extract, Transform, Load) utility functions module."""
-import io
 import os
-from contextlib import redirect_stderr, redirect_stdout
 
 import pandas as pd
 import requests
+
+from agentschemas.transformation import FilterRule, TransformationPlan
 
 
 class ETLTools:
@@ -78,88 +78,120 @@ class ETLTools:
 
         return top_3_rows
 
-    def execute_code(self, code: str) -> str:
-        """
-        Safely execute Python code in a restricted environment with output capture.
+    @staticmethod
+    def _require_columns(df: pd.DataFrame, columns: list[str]) -> None:
+        missing = sorted(set(columns) - set(df.columns))
+        if missing:
+            raise ValueError(f"Unknown columns in transformation plan: {missing}")
 
-        Args:
-            code (str): The code to be executed.
+    @staticmethod
+    def _apply_filter(df: pd.DataFrame, rule: FilterRule) -> pd.DataFrame:
+        ETLTools._require_columns(df, [rule.column])
+        series = df[rule.column]
+        value = rule.value
 
-        Returns:
-            str: The output of the executed code or an error message if execution fails.
-        """
-        # Validate code length to prevent DOS
-        if len(code) > 10000:
-            return "Error: Code exceeds maximum length (10000 characters)"
-
-        # Allowed modules for import
-        ALLOWED_MODULES = {'pandas', 'pd', 'os', 're', 'math', 'json'}
-
-        def safe_import(name, *args, **kwargs):
-            """Restrict imports to allowed modules only."""
-            if name not in ALLOWED_MODULES and not name.startswith(tuple(ALLOWED_MODULES)):
-                raise ImportError(f"Import of '{name}' is not allowed")
-            return __import__(name, *args, **kwargs)
-
-        # List of allowed safe functions
-        safe_builtins = {
-            'print': print,
-            'len': len,
-            'range': range,
-            'sum': sum,
-            'min': min,
-            'max': max,
-            'abs': abs,
-            'round': round,
-            'str': str,
-            'int': int,
-            'float': float,
-            'list': list,
-            'dict': dict,
-            'tuple': tuple,
-            'set': set,
-            'bool': bool,
-            'sorted': sorted,
-            'enumerate': enumerate,
-            'zip': zip,
-            '__import__': safe_import,  # Allow controlled imports
-        }
-
-        # Create a restricted execution environment
-        safe_globals = {
-            '__builtins__': safe_builtins,
-            'pd': pd,  # Allow pandas
-            'os': os,  # Allow os module
-        }
-
-        safe_locals = {}
-
-        try:
-            # Capture stdout and stderr
-            stdout_capture = io.StringIO()
-            stderr_capture = io.StringIO()
-
-            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                exec(code, safe_globals, safe_locals)
-
-            # Collect output
-            output = stdout_capture.getvalue()
-            errors = stderr_capture.getvalue()
-
-            if errors:
-                return f"Execution completed with warnings:\n{errors}\n\nOutput:\n{output}"
-            elif output:
-                return output
+        if rule.operator == "eq":
+            mask = series == value
+        elif rule.operator == "ne":
+            mask = series != value
+        elif rule.operator == "gt":
+            mask = series > value
+        elif rule.operator == "ge":
+            mask = series >= value
+        elif rule.operator == "lt":
+            mask = series < value
+        elif rule.operator == "le":
+            mask = series <= value
+        elif rule.operator in {"in", "not_in"}:
+            if not isinstance(value, list):
+                raise ValueError(f"Operator '{rule.operator}' requires a list value.")
+            mask = series.isin(value)
+            if rule.operator == "not_in":
+                mask = ~mask
+        elif rule.operator in {"is_null", "not_null"}:
+            mask = series.isna()
+            if rule.operator == "not_null":
+                mask = ~mask
+        else:
+            if not isinstance(value, str):
+                raise ValueError(f"Operator '{rule.operator}' requires a string value.")
+            text = series.astype("string")
+            pattern = value if rule.case_sensitive else value.casefold()
+            if not rule.case_sensitive:
+                text = text.str.casefold()
+            if rule.operator == "contains":
+                mask = text.str.contains(pattern, regex=False, na=False)
+            elif rule.operator == "starts_with":
+                mask = text.str.startswith(pattern, na=False)
             else:
-                return "Code executed successfully with no output."
+                mask = text.str.endswith(pattern, na=False)
 
-        except (SyntaxError, NameError, TypeError, ValueError, ZeroDivisionError,
-                AttributeError, ImportError, ModuleNotFoundError, IndexError,
-                KeyError, FileNotFoundError, OSError, RuntimeError,
-                MemoryError, OverflowError, AssertionError) as e:
-            return f"Failed to execute code: {type(e).__name__}: {e}"
-        except RecursionError:
-            return "Error: Maximum recursion depth exceeded (infinite loop detected)"
+        return df.loc[mask.fillna(False)]
+
+    def transform_load(
+        self,
+        input_file_path: str,
+        output_folder: str,
+        output_format: str,
+        plan: TransformationPlan,
+    ) -> str:
+        """Apply a validated operation plan without executing generated code."""
+        extension = os.path.splitext(input_file_path)[1].lower()
+        if extension == ".csv":
+            df = pd.read_csv(input_file_path)
+        elif extension == ".json":
+            df = pd.read_json(input_file_path, lines=True)
+        elif extension == ".parquet":
+            df = pd.read_parquet(input_file_path)
+        else:
+            raise ValueError(f"Unsupported file extension: {extension}")
+
+        for filter_rule in plan.filters:
+            df = self._apply_filter(df, filter_rule)
+
+        if plan.select_columns is not None:
+            self._require_columns(df, plan.select_columns)
+            df = df.loc[:, plan.select_columns]
+
+        if plan.rename_columns:
+            self._require_columns(df, list(plan.rename_columns))
+            if len(set(plan.rename_columns.values())) != len(plan.rename_columns):
+                raise ValueError("Renamed columns must have unique names.")
+            df = df.rename(columns=plan.rename_columns)
+
+        if plan.drop_duplicates_on is not None:
+            self._require_columns(df, plan.drop_duplicates_on)
+            subset = plan.drop_duplicates_on or None
+            df = df.drop_duplicates(subset=subset)
+
+        if plan.sort:
+            sort_columns = [rule.column for rule in plan.sort]
+            self._require_columns(df, sort_columns)
+            df = df.sort_values(
+                by=sort_columns,
+                ascending=[rule.ascending for rule in plan.sort],
+            )
+
+        if plan.limit is not None:
+            df = df.head(plan.limit)
+
+        normalized_format = output_format.lower().lstrip(".")
+        if normalized_format not in {"csv", "json", "parquet"}:
+            raise ValueError(f"Unsupported format: {output_format}")
+
+        os.makedirs(output_folder, exist_ok=True)
+        output_file = os.path.join(
+            output_folder,
+            f"transformed_data.{normalized_format}",
+        )
+        if normalized_format == "csv":
+            df.to_csv(output_file, index=False)
+        elif normalized_format == "json":
+            df.to_json(output_file, orient="records", lines=True)
+        else:
+            df.to_parquet(output_file, index=False)
+
+        return f"Transformed {len(df)} rows and saved them to {output_file}."
 
 
 if __name__ == "__main__":
@@ -167,4 +199,3 @@ if __name__ == "__main__":
     print(etl_tool.extract_load("https://pokeapi.co/api/v2/pokemon","data/extract","csv"))
     #path="C:\\Users\\manic\\source\\repos\\AI\\Data Professional\\data_agent\\data\\extract\\extracted_data.csv"
     #print(etl_tool.transform_load_context(path))
-    
