@@ -103,6 +103,21 @@ class AsyncDatabaseUtil:
                 print(f"Error executing query: {e}")
                 return None
 
+    async def execute_read_only_sql(self, query, *args, timeout=30.0):
+        """Fetch rows inside a database-enforced read-only transaction."""
+        if not self._pool:
+            print("Error: No active database connection pool.")
+            return None
+
+        async with self._pool.acquire() as connection:
+            try:
+                async with connection.transaction(readonly=True):
+                    result = await connection.fetch(query, *args, timeout=timeout)
+                return str([tuple(row.values()) for row in result])
+            except (asyncpg.PostgresError, OSError, TimeoutError) as e:
+                print(f"Error executing read-only query: {e}")
+                return None
+
     async def close(self):
         """Gracefully closes all connections in the pool."""
         if self._pool:

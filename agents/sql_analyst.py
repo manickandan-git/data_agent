@@ -14,6 +14,7 @@ from agentschemas import AgentSchema
 from agentschemas.judge import JudgeSchema
 from utils.database import AsyncDatabaseUtil
 from utils.llm_pick import pick_llm
+from utils.sql_safety import validate_read_only_sql
 
 
 # Utility function
@@ -142,6 +143,12 @@ def is_safe_sql(state: AgentSchema) -> AgentSchema:
 
     sql_query = clean_sql_query(state.generated_sql_query)
 
+    safety_result = validate_read_only_sql(sql_query)
+    if not safety_result.is_safe:
+        state.is_safe = "No"
+        state.comments = safety_result.reason
+        return state
+
     llm = pick_llm("medium")
     llm_judge = llm.with_structured_output(
         JudgeSchema,
@@ -199,11 +206,21 @@ def execute_sql_query(state: AgentSchema) -> AgentSchema:
 
     sql_query = clean_sql_query(state.generated_sql_query)
 
+    safety_result = validate_read_only_sql(sql_query)
+    if not safety_result.is_safe:
+        state.is_safe = "No"
+        state.comments = safety_result.reason
+        state.sql_query_execution_result = (
+            f"Error: Query blocked by deterministic safety validation. "
+            f"{safety_result.reason}"
+        )
+        return state
+
     async def _execute_query():
         db_obj = AsyncDatabaseUtil(os.environ.get("DATABASE_URL"))
         await db_obj.connect()
         try:
-            result = await db_obj.execute_sql(sql_query)
+            result = await db_obj.execute_read_only_sql(sql_query)
             return result
         finally:
             await db_obj.close()
