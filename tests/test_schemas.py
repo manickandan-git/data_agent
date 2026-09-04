@@ -1,13 +1,26 @@
 import pytest
 from pydantic import ValidationError
 
-from agentschemas import DataSchema, JudgeSchema, RouterSchema
+from agentschemas import AgentSchema, DataSchema, ETLSchema, JudgeSchema, RouterSchema
 
 
 def test_data_schema_defaults_to_no_route():
     state = DataSchema(messages=[])
 
     assert state.route_response == ""
+
+
+@pytest.mark.parametrize("schema,values", [
+    (DataSchema, {"messages": []}),
+    (ETLSchema, {"messages": []}),
+    (AgentSchema, {"messages": [], "user_question": "question"}),
+])
+def test_workflows_share_a_standard_output_contract(schema, values):
+    state = schema(**values)
+
+    assert state.status == "pending"
+    assert state.final_answer == ""
+    assert state.workflow_error == ""
 
 
 @pytest.mark.parametrize("route", ["sql", "etl"])

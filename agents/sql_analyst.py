@@ -46,6 +46,7 @@ def curate_question(state:AgentSchema) -> AgentSchema:
 
     # Preserve intent instead of letting a separate LLM rewrite the question.
     state.curated_question = state.user_question.strip()
+    state.status = "pending"
     state.workflow_error = ""
     state.schema_context = ""
     state.question_status = "pending"
@@ -185,6 +186,11 @@ def question_review_edge(state: AgentSchema) -> str:
 
 def finish_question_review(state: AgentSchema) -> AgentSchema:
     state.final_answer = state.question_feedback
+    state.status = (
+        "needs_clarification"
+        if state.question_status == "ambiguous"
+        else "rejected"
+    )
     state.messages = state.messages + [AIMessage(content=state.final_answer)]
     return state
 
@@ -277,6 +283,7 @@ def cancel_sql_query(state: AgentSchema) -> AgentSchema:
     comments = state.comments
 
     state.final_answer = f"The query was not executed. {comments}"
+    state.status = "rejected"
     state.messages = state.messages + [AIMessage(content=state.final_answer)]
 
     return state
@@ -348,6 +355,7 @@ def representation_final_answer(state: AgentSchema) -> AgentSchema:
 
     if execution_result == "[]":
         state.final_answer = "No matching records were found."
+        state.status = "success"
         state.messages = state.messages + [AIMessage(content=state.final_answer)]
         return state
 
@@ -368,6 +376,7 @@ def representation_final_answer(state: AgentSchema) -> AgentSchema:
         return finish_error(state)
 
     state.final_answer = llm_response
+    state.status = "success"
     state.messages = state.messages + [AIMessage(content=f"{llm_response}")]  # Append the final answer to the messages list
 
     return state
@@ -384,6 +393,7 @@ def _response_text(response) -> str:
 
 def finish_error(state: AgentSchema) -> AgentSchema:
     state.final_answer = state.workflow_error
+    state.status = "error"
     state.messages = state.messages + [AIMessage(content=state.final_answer)]
     return state
 

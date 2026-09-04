@@ -102,11 +102,30 @@ def llm_node(state:ETLSchema):
             Here's the chat history: {messages}\n
     """
 
-    final_answer = pick_llm("medium").bind_tools(tools).invoke(prompt)
+    try:
+        final_answer = pick_llm("medium").bind_tools(tools).invoke(prompt)
+    except (RuntimeError, TypeError, ValueError):
+        state.status = "error"
+        state.workflow_error = "The ETL request could not be processed. Check the model configuration."
+        state.final_answer = state.workflow_error
+        return state
 
     state.messages = messages + [final_answer]
+    if not final_answer.tool_calls:
+        state.final_answer = _response_text(final_answer)
+        state.status = "success"
 
     return state
+
+
+def _response_text(response) -> str:
+    content = response.content
+    if isinstance(content, str):
+        return content
+    return "".join(
+        block.get("text", "") for block in content
+        if isinstance(block, dict) and block.get("type") == "text"
+    )
 
 
 def tool_node(state:ETLSchema):
@@ -126,6 +145,12 @@ def tool_node(state:ETLSchema):
         observation = tool.invoke(tool_call['args'])
 
         tools_results.append(ToolMessage(content=observation, tool_call_id = tool_call['id']))
+        if observation.startswith(
+            ("Extraction failed:", "Transformation failed:", "Unsupported format:")
+        ):
+            state.status = "error"
+            state.workflow_error = observation
+            state.final_answer = observation
 
     state.messages = state.messages + tools_results
 
@@ -155,7 +180,15 @@ etl_analyst_graph.add_conditional_edges(
     }
 )
 
-etl_analyst_graph.add_edge("tool_node", "llm_node")
+def tool_result_edge(state: ETLSchema) -> str:
+    return "end" if state.status == "error" else "llm_node"
+
+
+etl_analyst_graph.add_conditional_edges(
+    "tool_node",
+    tool_result_edge,
+    {"llm_node": "llm_node", "end": END},
+)
 
 etl_analyst = etl_analyst_graph.compile()
 

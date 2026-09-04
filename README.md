@@ -190,6 +190,20 @@ Example requests:
 
 ## Workflows
 
+Every compiled workflow exposes the same caller-facing output fields:
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `pending`, `success`, `needs_clarification`, `rejected`, or `error` |
+| `final_answer` | User-facing answer, clarification, rejection, or safe error message |
+| `workflow_error` | Machine-readable safe diagnostic when `status` is `error` |
+| `messages` | Conversation snapshot containing LangChain messages |
+
+The main router normalizes child-workflow results to this contract. It adds only
+the child workflow's final answer to its messages rather than embedding the
+child's entire state dictionary. SQL-specific diagnostic fields remain
+available when invoking the SQL analyst directly.
+
 ### Router
 
 The main graph sends the latest message to a structured-output model. A response

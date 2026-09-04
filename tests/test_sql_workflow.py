@@ -47,6 +47,7 @@ def test_success_generates_once_and_does_not_duplicate_messages(workflow):
     module, database, generation, summary, judge = workflow
     result = module.sql_analyst.invoke({"messages": [], "user_question": "Show users"})
     assert result["final_answer"] == "One user found."
+    assert result["status"] == "success"
     assert len(result["messages"]) == 2
     generation.invoke.assert_called_once()
     summary.invoke.assert_called_once()
@@ -115,6 +116,9 @@ def test_question_review_stops_before_sql(workflow, status, message):
     validator.invoke.return_value = QuestionReview(status=status, message=message)
     result = module.sql_analyst.invoke({"messages": [], "user_question": "Who is best?"})
     assert result["question_status"] == status
+    assert result["status"] == (
+        "needs_clarification" if status == "ambiguous" else "rejected"
+    )
     assert result["final_answer"] == message
     assert result["generated_sql_query"] == ""
     assert len(result["messages"]) == 2

@@ -1,5 +1,5 @@
-from langchain_core.messages import HumanMessage
-from langgraph.graph import START, StateGraph
+from langchain_core.messages import AIMessage, HumanMessage
+from langgraph.graph import END, START, StateGraph
 
 from agents.etl_analyst import etl_analyst
 from agents.sql_analyst import sql_analyst
@@ -13,7 +13,14 @@ def router_node(state:DataSchema):
 
     message = state.messages[-1].content
 
-    route_response_dict = structured_llm("medium", RouterSchema).invoke(message).model_dump()
+    try:
+        route_response_dict = structured_llm("medium", RouterSchema).invoke(message).model_dump()
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        state.status = "error"
+        state.workflow_error = "The request could not be routed. Check the model configuration."
+        state.final_answer = state.workflow_error
+        state.messages = state.messages + [AIMessage(content=state.final_answer)]
+        return state
 
     route_response = route_response_dict['answer']
 
@@ -25,12 +32,16 @@ def etl_node(state:DataSchema):
 
     message = state.messages[-1].content
 
-    response = etl_analyst.invoke(
-             {"messages":[HumanMessage(content=f"""
-            {message}
-    """)]}
-        ) 
-    state.messages = state.messages + [response]
+    try:
+        response = etl_analyst.invoke(
+            {"messages": [HumanMessage(content=message)]}
+        )
+    except (RuntimeError, TypeError, ValueError):
+        return _workflow_failure(state, "The ETL workflow failed.")
+    state.status = response["status"]
+    state.final_answer = response["final_answer"]
+    state.workflow_error = response["workflow_error"]
+    state.messages = state.messages + [AIMessage(content=state.final_answer)]
 
     return state
 
@@ -50,10 +61,24 @@ def sql_node(state:DataSchema):
         "final_answer": ""
     }
 
-    response = sql_analyst.invoke(input_schema)
+    try:
+        response = sql_analyst.invoke(input_schema)
+    except (RuntimeError, TypeError, ValueError):
+        return _workflow_failure(state, "The SQL workflow failed.")
 
-    state.messages = state.messages + [response]
+    state.status = response["status"]
+    state.final_answer = response["final_answer"]
+    state.workflow_error = response["workflow_error"]
+    state.messages = state.messages + [AIMessage(content=state.final_answer)]
 
+    return state
+
+
+def _workflow_failure(state: DataSchema, message: str) -> DataSchema:
+    state.status = "error"
+    state.workflow_error = message
+    state.final_answer = message
+    state.messages = state.messages + [AIMessage(content=message)]
     return state
 
 data_agent_graph = StateGraph(DataSchema)
@@ -65,6 +90,8 @@ data_agent_graph.add_node("sql_node", sql_node)
 data_agent_graph.add_edge(START, "router_node")
 
 def route_edge(state: DataSchema) -> str:
+    if state.status == "error":
+        return "end"
     if state.route_response == "sql":
         return "sql_node"
     elif state.route_response == "etl":
@@ -76,7 +103,8 @@ def route_edge(state: DataSchema) -> str:
 data_agent_graph.add_conditional_edges("router_node", route_edge,
                                       {
                                           "sql_node": "sql_node",
-                                          "etl_node": "etl_node"
+                                          "etl_node": "etl_node",
+                                          "end": END,
                                       })
 
 data_analyst = data_agent_graph.compile()

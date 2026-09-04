@@ -1,13 +1,12 @@
 """ETL (Extract, Transform, Load) Agent Schema module."""
 
 
-from operator import add
-from typing import Annotated
+from pydantic import Field
 
-from pydantic import BaseModel, Field
+from agentschemas.workflow import WorkflowOutput
 
 
-class ETLSchema(BaseModel):
+class ETLSchema(WorkflowOutput):
     """Schema for ETL (Extract, Transform, Load) agent."""
 
-    messages : Annotated[list,add] = Field(..., description="List of messages to be processed by the ETL agent")
+    messages: list = Field(..., description="Conversation snapshot for the ETL agent")
