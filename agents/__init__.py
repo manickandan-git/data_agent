@@ -1,5 +1,5 @@
-from agents.data_analyst import data_analyst
-from agents.etl_analyst import etl_analyst
-from agents.sql_analyst import sql_analyst
+"""Agent workflow package.
 
-__all__ = ["data_analyst", "etl_analyst", "sql_analyst"]
+Import workflows from their defining modules so importing this package remains
+free of graph construction and transitive agent imports.
+"""

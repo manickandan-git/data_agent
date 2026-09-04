@@ -1,8 +1,3 @@
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from langchain_core.messages import HumanMessage
 from langgraph.graph import START, StateGraph
 
@@ -101,7 +96,7 @@ if __name__ == "__main__":
         #     """)]}
 
         # for testing the SQL node
-        {"messages":[HumanMessage(content="For all payment transactions made in April 2026, show the total payment amount grouped by payment method. Include every payment status.\nAlso show the total number of rides dropped during December 2025.")],
+        {"messages":[HumanMessage(content="For all payment records with payment_time during April 2026, show the sum of amount grouped by payment_method, including every payment status. Also show the number of rides with status completed whose dropoff_time occurred during December 2025.")],
         "route_response": "sql"}
         
         

@@ -286,9 +286,9 @@ database, or real provider key.
 Run an agent module to regenerate its Mermaid PNG:
 
 ```powershell
-python agents/data_analyst.py
-python agents/sql_analyst.py
-python agents/etl_analyst.py
+python -m agents.data_analyst
+python -m agents.sql_analyst
+python -m agents.etl_analyst
 ```
 
 Outputs are `data_agent_graph.png`, `sql_analyst_graph.png`, and
