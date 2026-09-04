@@ -46,7 +46,7 @@ def sql_node(state:DataSchema):
     input_schema = {
         "messages": [],
         "user_question": f"{message}",
-        "curated_ques": "",
+        "curated_question": "",
         "prompt_query_context": "",
         "generated_sql_query": "",
         "is_safe": "No",

@@ -2,14 +2,17 @@
 Schema definitions for the SQL Analyst Agent.
 """
 
-from operator import add
-from typing import Annotated, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
 class AgentSchema(BaseModel):
-    messages: Annotated[list, add] = Field(..., description="A list of messages for the agent")
+    messages: list = Field(..., description="Conversation snapshot for the SQL workflow")
+    workflow_error: str = ""
+    schema_context: str = ""
+    question_status: Literal["pending", "clear", "ambiguous", "unsupported", "error"] = "pending"
+    question_feedback: str = ""
     user_question: str = Field(..., description="The question asked by the user")
     curated_question: str = Field(default="", description="Crated questions for the agent")
     prompt_query_context: str = Field(default="", description="A detailed Prompt query context with SQL DB for the agent")

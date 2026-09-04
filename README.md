@@ -183,6 +183,30 @@ The system automatically routes based on query type:
 
 ## Architecture
 
+### SQL workflow
+
+The SQL branch preserves the original question, loads schema metadata without
+sample records, validates question answerability and ambiguity, generates SQL once,
+runs deterministic safety validation and
+an LLM relevance review, executes in a read-only transaction, then summarizes.
+It requires approval again at execution time. Empty results receive a direct
+no-matches answer; schema, generation, and execution failures terminate without
+inventing a summary. `workflow_error` identifies handled failures and
+`final_answer` is populated for success, rejection, and handled errors.
+The SQL state's message list is a snapshot rather than an accumulating reducer,
+so returning full state no longer duplicates the conversation at every node.
+Schema discovery still inspects all tables in the configured schema; automatic
+relevant-table selection and async-native graph nodes are not implemented yet.
+
+Question review returns `question_status` (`clear`, `ambiguous`, `unsupported`,
+or `error`) and `question_feedback`. Only clear questions reach SQL generation.
+Ambiguous questions return a specific clarification question in `final_answer`;
+unsupported requests explain missing data. Validation failures stop execution.
+The LLM review is a guardrail, not a guarantee of semantic correctness.
+This is a single-turn workflow: after clarification, submit the original request
+together with the clarified metric/filters as a new `user_question`. There is no
+automatic persistent clarification session yet.
+
 ### Data Flow
 
 ```

@@ -23,7 +23,7 @@ class AsyncDatabaseUtil:
                 print(f"Error creating connection pool: {e}")
                 self._pool = None
 
-    async def schema_details(self, schema_name):
+    async def schema_details(self, schema_name, *, include_samples=True):
         if not self._pool:
             return "Error: No active database connection pool. Call connect() first."
 
@@ -60,6 +60,9 @@ class AsyncDatabaseUtil:
                         column_name = col_record["column_name"]
                         data_type = col_record["data_type"]
                         schema_info_context += f"  Column: {column_name}, Data Type: {data_type}\n"
+
+                    if not include_samples:
+                        continue
 
                     # 3. Dynamic identifiers require secure manual formatting.
                     # asyncpg uses $1, $2 for parameters, but identifiers (names) must be escaped.
