@@ -88,6 +88,8 @@ def curate_prompt_query_context(state:AgentSchema) -> AgentSchema:
             await db_obj.connect()
             schema_info = await db_obj.schema_details(
                 get_config().database_schema, include_samples=False,
+                categorical_columns=get_config().sql_categorical_columns,
+                categorical_value_limit=get_config().sql_categorical_value_limit,
             )
             return schema_info
         finally:
@@ -113,6 +115,10 @@ def curate_prompt_query_context(state:AgentSchema) -> AgentSchema:
     Note - Just generate the SQL query without any explanation or additional text because
     this query will be executed directly on the database. So, the output should be SQL
     ready to be executed without any modifications.
+    For categorical predicates, use exact literals from "Allowed values" metadata,
+    including underscores and capitalization. Map natural wording only when the
+    match is clear (for example, credit card to 'credit_card' when it is listed).
+    Never replace underscores with spaces and never invent a categorical value.
 
     User's Original Query: {curated_question}
 
@@ -139,9 +145,20 @@ def validate_question(state: AgentSchema) -> AgentSchema:
     Return ambiguous and ask a specific clarification question when a required
     metric, time range, filter, grouping, or relationship is unclear. Do not
     demand a time range for requests that can reasonably mean all records.
+    Do not demand filters the user did not request. Words such as "all" mean all
+    rows matching the explicit predicates, regardless of other categorical
+    columns. For example, "sum of all credit card transactions for April 2026"
+    is clear: filter payment_method to the grounded credit-card value and
+    payment_time to April, then sum amount without adding a payment_status
+    predicate. Ask about payment status or refund treatment only when the user
+    asks for completed, successful, settled, failed, refunded, or net amounts,
+    or uses another term whose definition materially requires that choice.
     Return unsupported if the schema lacks the data or the request is not a
     retrieval question; explain what is missing. Metadata alone cannot prove
     particular values or records exist. Do not claim they do.
+    "Allowed values" are exact database literals for approved categorical
+    columns. If the user's wording has no confident unique match, return
+    ambiguous and ask which listed value they mean.
 
     Original question: {state.user_question}
     Database metadata: {state.schema_context}
@@ -224,6 +241,8 @@ def is_safe_sql(state: AgentSchema) -> AgentSchema:
     You are an SQL Judge for data security and relevance. Your task is to determine two things:
     1. Is the SQL query safe? (only for data retrieval, no INSERT, UPDATE, DELETE, etc.)
     2. Does the SQL query actually answer the user's question?
+    3. Do predicates on listed categorical columns use exact allowed values?
+       Reject guessed spellings, including spaces substituted for underscores.
 
     If the query doesn't match the user's question (e.g., user asks about plants but query selects cars),
     respond with 'No' and explain that the requested data is not available in the database.
@@ -231,6 +250,7 @@ def is_safe_sql(state: AgentSchema) -> AgentSchema:
     If the SQL query is safe AND relevant, respond with 'Yes' otherwise respond with 'No'.
 
     User's Question: {state.curated_question}
+    Database Metadata: {state.schema_context}
     Here's the SQL query to evaluate:
     {sql_query}"""
 

@@ -30,6 +30,16 @@ def test_defaults_do_not_require_provider_keys(settings_factory):
     assert settings.sql_timeout_seconds == 30
 
 
+def test_default_categorical_columns_cover_safe_seed_dimensions(settings_factory):
+    assert settings_factory().sql_categorical_columns == {
+        "payments": ["payment_method", "payment_status"],
+        "ratings": ["rating"],
+        "rides": ["status", "cancellation_reason"],
+        "users": ["user_type", "city", "province", "is_active"],
+        "vehicles": ["make", "model", "color", "is_active"],
+    }
+
+
 def test_secrets_are_redacted(settings_factory):
     settings = settings_factory(openai_api_key="private-value")
     assert "private-value" not in repr(settings)
@@ -39,6 +49,8 @@ def test_secrets_are_redacted(settings_factory):
 @pytest.mark.parametrize("field,value", [
     ("sql_timeout_seconds", 0), ("sql_row_limit", -1),
     ("llm_max_retries", -1), ("database_schema", "public; DROP TABLE users"),
+    ("sql_categorical_columns", {"payments; DROP": ["payment_method"]}),
+    ("sql_categorical_columns", {"payments": ["payment_method", "payment_method"]}),
 ])
 def test_invalid_configuration_is_rejected(settings_factory, field, value):
     with pytest.raises(ValidationError):

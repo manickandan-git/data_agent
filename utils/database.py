@@ -23,7 +23,10 @@ class AsyncDatabaseUtil:
                 print(f"Error creating connection pool: {e}")
                 self._pool = None
 
-    async def schema_details(self, schema_name, *, include_samples=True):
+    async def schema_details(
+        self, schema_name, *, include_samples=True,
+        categorical_columns=None, categorical_value_limit=50,
+    ):
         if not self._pool:
             return "Error: No active database connection pool. Call connect() first."
 
@@ -60,6 +63,20 @@ class AsyncDatabaseUtil:
                         column_name = col_record["column_name"]
                         data_type = col_record["data_type"]
                         schema_info_context += f"  Column: {column_name}, Data Type: {data_type}\n"
+
+                    allowed = set(categorical_columns.get(table_name, [])) if categorical_columns else set()
+                    actual = {record["column_name"] for record in columns_list}
+                    for column_name in sorted(allowed & actual):
+                        safe_column = asyncpg.utils._quote_ident(column_name)
+                        safe_schema = asyncpg.utils._quote_ident(schema_name)
+                        safe_table = asyncpg.utils._quote_ident(table_name)
+                        values = await connection.fetch(
+                            f"SELECT DISTINCT {safe_column} AS value FROM {safe_schema}.{safe_table} "
+                            f"WHERE {safe_column} IS NOT NULL ORDER BY {safe_column} LIMIT $1;",
+                            categorical_value_limit,
+                        )
+                        rendered = ", ".join(repr(row["value"]) for row in values)
+                        schema_info_context += f"  Allowed values for {column_name}: {rendered or '(none found)'}\n"
 
                     if not include_samples:
                         continue

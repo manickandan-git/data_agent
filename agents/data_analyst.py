@@ -101,8 +101,9 @@ if __name__ == "__main__":
         #     """)]}
 
         # for testing the SQL node
-        {"messages":[HumanMessage(content="What is the sum of all credit transactions for April 2026 we have in our database?")],
-        "route_response": ""}
+        {"messages":[HumanMessage(content="For all payment transactions made in April 2026, show the total payment amount grouped by payment method. Include every payment status.\nAlso show the total number of rides dropped during December 2025.")],
+        "route_response": "sql"}
+        
         
         # for testing the API extraction node
         # {"messages":[HumanMessage(content="I want to extract the data from the API endpoint 'https://pokeapi.co/api/v2/pokemon' and save it to data/extract folder in the csv format")]}

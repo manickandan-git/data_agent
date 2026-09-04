@@ -15,10 +15,16 @@ def workflow(monkeypatch):
     settings = SimpleNamespace(
         require_database_url=lambda: "test-dsn", database_schema="public",
         sql_row_limit=10, sql_timeout_seconds=30,
+        sql_categorical_columns={"payments": ["payment_method"]},
+        sql_categorical_value_limit=50,
     )
     database = SimpleNamespace(
         connect=AsyncMock(), close=AsyncMock(),
-        schema_details=AsyncMock(return_value="Table: users; Column: user_id integer"),
+        schema_details=AsyncMock(return_value=(
+            "Table: users; Column: user_id integer\nTable: payments; "
+            "Column: payment_method text\nAllowed values for payment_method: "
+            "'credit_card', 'cash'"
+        )),
         execute_read_only_sql=AsyncMock(return_value="[(1,)]"),
     )
     generation = Mock()
@@ -44,7 +50,11 @@ def test_success_generates_once_and_does_not_duplicate_messages(workflow):
     assert len(result["messages"]) == 2
     generation.invoke.assert_called_once()
     summary.invoke.assert_called_once()
-    database.schema_details.assert_awaited_once_with("public", include_samples=False)
+    database.schema_details.assert_awaited_once_with(
+        "public", include_samples=False,
+        categorical_columns={"payments": ["payment_method"]},
+        categorical_value_limit=50,
+    )
     database.execute_read_only_sql.assert_awaited_once()
     assert database.close.await_count == 2
 
@@ -134,3 +144,38 @@ def test_question_review_receives_schema_and_preserves_request(workflow):
     assert question in prompt
     assert result["curated_question"] == question
     assert question in generation.invoke.call_args.args[0]
+
+
+def test_categorical_values_ground_generation_and_judgment(workflow):
+    module, _, generation, _, judge = workflow
+    generation.invoke.return_value = AIMessage(content=(
+        "SELECT SUM(amount) FROM payments "
+        "WHERE payment_method = 'credit_card'"
+    ))
+    result = module.sql_analyst.invoke({
+        "messages": [],
+        "user_question": "What is the sum of all credit card transactions?",
+    })
+    generation_prompt = generation.invoke.call_args.args[0]
+    judge_prompt = judge.invoke.call_args.args[0]
+    value_context = "Allowed values for payment_method: 'credit_card', 'cash'"
+    assert value_context in generation_prompt
+    assert "Never replace underscores with spaces" in generation_prompt
+    assert value_context in judge_prompt
+    assert "payment_method = 'credit_card'" in result["generated_sql_query"]
+
+
+def test_all_transactions_does_not_require_payment_status_clarification(workflow):
+    module, database, generation, _, _ = workflow
+    question = "What is the sum of all credit card transactions for April 2026?"
+
+    result = module.sql_analyst.invoke({"messages": [], "user_question": question})
+
+    validator = module.structured_llm("medium", QuestionReview)
+    validation_prompt = validator.invoke.call_args.args[0]
+    normalized_prompt = " ".join(validation_prompt.split())
+    assert 'Words such as "all" mean all' in validation_prompt
+    assert "without adding a payment_status predicate" in normalized_prompt
+    assert result["question_status"] == "clear"
+    generation.invoke.assert_called_once()
+    database.execute_read_only_sql.assert_awaited_once()
