@@ -2,9 +2,9 @@
 from pathlib import Path
 
 import pandas as pd
-import requests
 
 from agentschemas.transformation import FilterRule, TransformationPlan
+from utils.api_extractor import ExtractionError, fetch_records
 
 
 class ETLTools:
@@ -47,7 +47,8 @@ class ETLTools:
                 f"Refusing to overwrite existing output file: {output_file}"
             )
 
-    def extract_load(self, url:str, output_folder:str, format:str) -> str:  
+    def extract_load(self, url:str, output_folder:str, format:str,
+                     records_path: str = "results", next_path: str = "next") -> str:
         """
         Extract data from the API (url) and load it into the target location output_folder.
 
@@ -71,13 +72,11 @@ class ETLTools:
         self._ensure_new_output(file_name)
 
         try:
-            response = requests.get(url)
-            response.raise_for_status()  # Raise an exception for HTTP errors
-            data = response.json()
+            records = fetch_records(url, records_path, next_path)
 
             resolved_output_folder.mkdir(parents=True, exist_ok=True)
 
-            df = pd.json_normalize(data['results'])
+            df = pd.json_normalize(records)
             if normalized_format == "csv":
                 df.to_csv(file_name, index=False)
             elif normalized_format == "json":
@@ -85,9 +84,9 @@ class ETLTools:
             else:
                 df.to_parquet(file_name, index=False)
 
-            return f"Data successfully extracted from {url} and loaded into {file_name}."
-        except requests.RequestException as e:
-            return f"An error occurred during extraction: {e!s}"
+            return f"Data successfully extracted: {len(records)} rows loaded into {file_name}."
+        except ExtractionError as error:
+            return f"Extraction failed: {error}"
 
     """Transform and load context utility function."""
     def transform_load_context(self, file_path:str):

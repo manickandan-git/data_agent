@@ -24,7 +24,7 @@ class FakeResponse:
 def test_extract_load_writes_api_results_to_csv(monkeypatch, tmp_path):
     extract_folder = tmp_path / "extract"
     response = FakeResponse({"results": [{"name": "bulbasaur", "id": 1}]})
-    monkeypatch.setattr(requests, "get", lambda _url: response)
+    monkeypatch.setattr("utils.etl_tools.fetch_records", lambda *_: response.payload["results"])
 
     result = ETLTools(data_root=tmp_path).extract_load(
         "https://example.test/pokemon",
@@ -41,12 +41,10 @@ def test_extract_load_writes_api_results_to_csv(monkeypatch, tmp_path):
 
 
 def test_extract_load_reports_request_failure(monkeypatch, tmp_path):
-    error = requests.RequestException("service unavailable")
-    monkeypatch.setattr(
-        requests,
-        "get",
-        lambda _url: FakeResponse(error=error),
-    )
+    from utils.api_extractor import ExtractionError
+    def fail(*_):
+        raise ExtractionError("API request failed.")
+    monkeypatch.setattr("utils.etl_tools.fetch_records", fail)
 
     result = ETLTools(data_root=tmp_path).extract_load(
         "https://example.test/pokemon",
@@ -54,7 +52,7 @@ def test_extract_load_reports_request_failure(monkeypatch, tmp_path):
         "csv",
     )
 
-    assert result == "An error occurred during extraction: service unavailable"
+    assert result == "Extraction failed: API request failed."
 
 
 def test_extract_load_rejects_unsupported_format(monkeypatch, tmp_path):

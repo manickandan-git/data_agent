@@ -9,6 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import asyncpg
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
+from pydantic import ValidationError
 
 from agentschemas import AgentSchema
 from agentschemas.judge import JudgeSchema
@@ -96,7 +97,7 @@ def curate_prompt_query_context(state:AgentSchema) -> AgentSchema:
         schema_info = asyncio.run(_get_schema_info())
         if not schema_info or schema_info.startswith("Error"):
             raise RuntimeError("Schema unavailable")
-    except Exception:
+    except (RuntimeError, OSError, ValueError, asyncpg.PostgresError):
         state.workflow_error = "Database schema could not be loaded. Check the database configuration and connection."
         return state
 
@@ -150,12 +151,14 @@ def validate_question(state: AgentSchema) -> AgentSchema:
         # Validate even when a provider adapter returns a plain dictionary.
         if isinstance(review, QuestionReview):
             review = review.model_dump()
+        elif not isinstance(review, dict):
+            raise TypeError("Question review response was not a dictionary or QuestionReview instance.")
         review = QuestionReview.model_validate(review)
         if not review.message.strip():
             raise ValueError("Empty question feedback")
         state.question_status = review.status
         state.question_feedback = review.message.strip()
-    except Exception:
+    except (AttributeError, TypeError, ValueError, RuntimeError, ValidationError):
         state.question_status = "error"
         state.workflow_error = "The question could not be validated. No SQL was generated; please try again."
     return state
@@ -191,7 +194,7 @@ def generate_sql_query(state: AgentSchema) -> AgentSchema:
     try:
         generated_sql_query = pick_llm("medium").invoke(prompt)
         state.generated_sql_query = clean_sql_query(_response_text(generated_sql_query))
-    except Exception:
+    except (RuntimeError, TypeError, ValueError):
         state.workflow_error = "SQL generation failed. Check the model configuration or try again."
 
     return state
@@ -234,7 +237,7 @@ def is_safe_sql(state: AgentSchema) -> AgentSchema:
     try:
         llm_judge = structured_llm("medium", JudgeSchema)
         response = llm_judge.invoke(prompt).model_dump()
-    except Exception:
+    except (AttributeError, KeyError, TypeError, ValueError, RuntimeError):
         state.is_safe = "No"
         state.comments = "The relevance review failed; the query was not executed."
         return state
@@ -344,7 +347,7 @@ def representation_final_answer(state: AgentSchema) -> AgentSchema:
 
     try:
         llm_response = _response_text(pick_llm("low").invoke(prompt))
-    except Exception:
+    except (AttributeError, RuntimeError, TypeError, ValueError):
         state.workflow_error = "The query completed, but its results could not be summarized."
         return finish_error(state)
 

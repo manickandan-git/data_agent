@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     database_schema: str = Field(default="public", pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     sql_row_limit: int = Field(default=10, ge=1, le=100_000)
     sql_timeout_seconds: float = Field(default=30, gt=0, le=300)
+    etl_timeout_seconds: float = Field(default=30, gt=0, le=120)
+    etl_max_retries: int = Field(default=2, ge=0, le=5)
+    etl_max_pages: int = Field(default=20, ge=1, le=100)
+    etl_max_rows: int = Field(default=100_000, ge=1, le=1_000_000)
+    etl_bearer_token: SecretStr | None = None
+    etl_auth_origin: str = ""
 
     def require_database_url(self) -> str:
         if not self.database_url or not self.database_url.get_secret_value():

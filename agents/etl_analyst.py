@@ -13,7 +13,8 @@ from utils.llm_pick import pick_llm, structured_llm
 
 
 @tool
-def extract_load_tool(url:str, output_folder:str, format:str) -> str:
+def extract_load_tool(url:str, output_folder:str, format:str,
+                      records_path: str = "results", next_path: str = "next") -> str:
     """
     This tool extracts the data from the API (url) and loads it into the
     the desired location (output_folder).
@@ -22,6 +23,8 @@ def extract_load_tool(url:str, output_folder:str, format:str) -> str:
         url (str): The API endpoint from which to extract data.
         output_folder (str): The folder where the extracted data will be saved.
         format (str): The format in which to save the extracted data (csv, json, parquet).
+        records_path (str): Dot-separated JSON path to records; empty for a root array.
+        next_path (str): Dot-separated next-page URL path; empty to disable pagination.
     
     Returns:
         str: A message indicating the success or failure of the operation.
@@ -29,7 +32,7 @@ def extract_load_tool(url:str, output_folder:str, format:str) -> str:
     """
     etl_tools = ETLTools()
     try:
-        return etl_tools.extract_load(url, output_folder, format)
+        return etl_tools.extract_load(url, output_folder, format, records_path, next_path)
     except (OSError, ValueError) as error:
         return f"Extraction failed: {error}"
 

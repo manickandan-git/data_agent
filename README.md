@@ -163,6 +163,25 @@ See [OpenAI migration guidance](https://developers.openai.com/api/docs/guides/la
 
 ### Basic Example
 
+API extraction supports HTTPS endpoints with bounded timeouts, retries for
+connection/timeouts, HTTP 429 and 5xx, and same-origin next-link pagination.
+Configure limits using the `ETL_*` settings in `.env.example`. If a limit is
+exceeded, extraction fails instead of saving an incomplete dataset.
+`records_path` defaults to `results`; use a dotted path such as `data.items`, or
+an empty string for a root JSON array. Records must be objects. `next_path`
+defaults to `next`; an absent top-level `next` ends pagination. Use an empty
+string to disable pagination, or a dotted path such as `links.next`.
+Numeric offsets/cursors and authentication schemes other than bearer tokens
+are not implemented. Redirects and cross-origin pagination are rejected.
+
+For authentication, set `ETL_BEARER_TOKEN` and a matching `ETL_AUTH_ORIGIN`
+(for example, `https://api.example.com`). Tokens are never tool arguments.
+Environment proxy and `.netrc` inheritance are disabled. Error messages omit
+response bodies and request URLs. Outputs remain confined to `data/extract`
+and existing outputs are not overwritten. This is not a network sandbox:
+deployments must enforce egress rules if untrusted users can supply URLs.
+Page/row limits do not impose a byte-size or total elapsed-time limit.
+
 ```python
 from langchain_core.messages import HumanMessage
 from agents.data_analyst import data_analyst
