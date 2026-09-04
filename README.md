@@ -94,6 +94,33 @@ receives the configured key and prompts.
 Clients and settings are cached. Restart after editing `.env`, or call
 `reset_llm_clients()` to clear both caches.
 
+### Observability
+
+The application entry point enables structured workflow logs using:
+
+```dotenv
+OBSERVABILITY_LOG_LEVEL=INFO
+OBSERVABILITY_JSON_LOGS=true
+```
+
+Each workflow result has a `run_id`, and routed SQL or ETL work retains that
+same correlation ID. Graph nodes emit `workflow.node.started`,
+`workflow.node.completed`, or `workflow.node.failed` events with the
+workflow name, node name, status, and duration in milliseconds.
+
+Logging is not configured during import. Applications invoking graphs directly
+can enable it explicitly:
+
+```python
+from utils.observability import configure_observability
+
+configure_observability("INFO", json_logs=True)
+```
+
+Observability events intentionally exclude prompts, generated SQL, database
+results, source records, URLs, credentials, and exception messages. Failed-node
+events record only the exception type.
+
 ### Database and SQL
 
 `DATABASE_URL` is needed only for database operations:
@@ -194,6 +221,7 @@ Every compiled workflow exposes the same caller-facing output fields:
 
 | Field | Meaning |
 | --- | --- |
+| `run_id` | Correlation ID shared by the router and selected child workflow |
 | `status` | `pending`, `success`, `needs_clarification`, `rejected`, or `error` |
 | `final_answer` | User-facing answer, clarification, rejection, or safe error message |
 | `workflow_error` | Machine-readable safe diagnostic when `status` is `error` |

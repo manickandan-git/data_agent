@@ -28,6 +28,8 @@ def test_defaults_do_not_require_provider_keys(settings_factory):
     assert settings.llm_provider == "openai"
     assert settings.anthropic_api_key is None
     assert settings.sql_timeout_seconds == 30
+    assert settings.observability_log_level == "INFO"
+    assert settings.observability_json_logs is True
 
 
 def test_default_categorical_columns_cover_safe_seed_dimensions(settings_factory):
@@ -49,6 +51,7 @@ def test_secrets_are_redacted(settings_factory):
 @pytest.mark.parametrize("field,value", [
     ("sql_timeout_seconds", 0), ("sql_row_limit", -1),
     ("llm_max_retries", -1), ("database_schema", "public; DROP TABLE users"),
+    ("observability_log_level", "TRACE"),
     ("sql_categorical_columns", {"payments; DROP": ["payment_method"]}),
     ("sql_categorical_columns", {"payments": ["payment_method", "payment_method"]}),
 ])

@@ -5,6 +5,7 @@ from langgraph.graph import END, START, StateGraph
 from agentschemas import ETLSchema, TransformationPlan
 from utils.etl_tools import ETLTools
 from utils.llm_pick import pick_llm, structured_llm
+from utils.observability import observed_node
 
 
 @tool
@@ -159,8 +160,8 @@ def tool_node(state:ETLSchema):
 
 # Nodes & Edges
 etl_analyst_graph = StateGraph(ETLSchema)
-etl_analyst_graph.add_node("llm_node", llm_node)
-etl_analyst_graph.add_node("tool_node", tool_node)
+etl_analyst_graph.add_node("llm_node", observed_node("etl", "llm_node", llm_node))
+etl_analyst_graph.add_node("tool_node", observed_node("etl", "tool_node", tool_node))
 
 etl_analyst_graph.add_edge(START, "llm_node")
 

@@ -1,8 +1,15 @@
 from langchain_core.messages import HumanMessage
 
 from agents.data_analyst import data_analyst
+from config import get_config
+from utils.observability import configure_observability
 
 if __name__ == "__main__":
+    settings = get_config()
+    configure_observability(
+        settings.observability_log_level,
+        json_logs=settings.observability_json_logs,
+    )
     response = data_analyst.invoke(
     # for testing the ETL node
     

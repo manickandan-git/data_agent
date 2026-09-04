@@ -13,6 +13,7 @@ from agentschemas.question import QuestionReview
 from config import get_config
 from utils.database import AsyncDatabaseUtil
 from utils.llm_pick import pick_llm, structured_llm
+from utils.observability import observed_node
 from utils.sql_safety import validate_read_only_sql
 
 
@@ -409,16 +410,22 @@ def _next_or_error(next_node):
 sql_agent_graph = StateGraph(AgentSchema)
 
 # Nodes
-sql_agent_graph.add_node(curate_question,name="curate_question")
-sql_agent_graph.add_node(curate_prompt_query_context,name="curate_prompt_query_context")
-sql_agent_graph.add_node(generate_sql_query,name="generate_sql_query")
-sql_agent_graph.add_node(is_safe_sql,name="is_safe_sql")
-sql_agent_graph.add_node(cancel_sql_query,name="cancel_sql_query")
-sql_agent_graph.add_node(execute_sql_query,name="execute_sql_query")
-sql_agent_graph.add_node(representation_final_answer,name="representation_final_answer")
-sql_agent_graph.add_node("finish_error", finish_error)
-sql_agent_graph.add_node("validate_question", validate_question)
-sql_agent_graph.add_node("finish_question_review", finish_question_review)
+for node_name, node_function in [
+    ("curate_question", curate_question),
+    ("curate_prompt_query_context", curate_prompt_query_context),
+    ("generate_sql_query", generate_sql_query),
+    ("is_safe_sql", is_safe_sql),
+    ("cancel_sql_query", cancel_sql_query),
+    ("execute_sql_query", execute_sql_query),
+    ("representation_final_answer", representation_final_answer),
+    ("finish_error", finish_error),
+    ("validate_question", validate_question),
+    ("finish_question_review", finish_question_review),
+]:
+    sql_agent_graph.add_node(
+        node_name,
+        observed_node("sql", node_name, node_function),
+    )
 
 # Edges
 sql_agent_graph.add_edge(START, "curate_question")

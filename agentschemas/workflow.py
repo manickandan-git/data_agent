@@ -4,7 +4,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
 WorkflowStatus = Literal[
     "pending",
     "success",
@@ -17,6 +16,10 @@ WorkflowStatus = Literal[
 class WorkflowOutput(BaseModel):
     """Fields callers can rely on regardless of the selected workflow."""
 
+    run_id: str = Field(
+        default="",
+        description="Correlation identifier shared by a routed workflow run.",
+    )
     status: WorkflowStatus = "pending"
     final_answer: str = Field(
         default="",

@@ -5,6 +5,7 @@ from agents.etl_analyst import etl_analyst
 from agents.sql_analyst import sql_analyst
 from agentschemas import DataSchema, RouterSchema
 from utils.llm_pick import structured_llm
+from utils.observability import observed_node
 
 # ---------------------------- DATA AGENT GRAPH ---------------------------- #
 
@@ -34,7 +35,7 @@ def etl_node(state:DataSchema):
 
     try:
         response = etl_analyst.invoke(
-            {"messages": [HumanMessage(content=message)]}
+            {"messages": [HumanMessage(content=message)], "run_id": state.run_id}
         )
     except (RuntimeError, TypeError, ValueError):
         return _workflow_failure(state, "The ETL workflow failed.")
@@ -51,6 +52,7 @@ def sql_node(state:DataSchema):
 
     input_schema = {
         "messages": [],
+        "run_id": state.run_id,
         "user_question": f"{message}",
         "curated_question": "",
         "prompt_query_context": "",
@@ -83,9 +85,11 @@ def _workflow_failure(state: DataSchema, message: str) -> DataSchema:
 
 data_agent_graph = StateGraph(DataSchema)
 
-data_agent_graph.add_node("router_node", router_node)
-data_agent_graph.add_node("etl_node", etl_node)
-data_agent_graph.add_node("sql_node", sql_node)
+data_agent_graph.add_node(
+    "router_node", observed_node("data", "router_node", router_node)
+)
+data_agent_graph.add_node("etl_node", observed_node("data", "etl_node", etl_node))
+data_agent_graph.add_node("sql_node", observed_node("data", "sql_node", sql_node))
 
 data_agent_graph.add_edge(START, "router_node")
 

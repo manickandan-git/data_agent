@@ -19,6 +19,7 @@ def test_workflows_share_a_standard_output_contract(schema, values):
     state = schema(**values)
 
     assert state.status == "pending"
+    assert state.run_id == ""
     assert state.final_answer == ""
     assert state.workflow_error == ""
 
