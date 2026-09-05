@@ -1,33 +1,37 @@
+"""Command-line interface for one Data Agent question."""
+
+import argparse
+
 from langchain_core.messages import HumanMessage
 
-from agents.data_analyst import data_analyst
 from config import get_config
 from utils.observability import configure_observability
 
-if __name__ == "__main__":
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="data-agent",
+        description="Route one natural-language request through the Data Agent.",
+    )
+    parser.add_argument("question", help="Database or ETL request to process.")
+    return parser
+
+
+def run() -> int:
+    """Run one workflow request and print only its public final answer."""
+    args = build_parser().parse_args()
     settings = get_config()
     configure_observability(
         settings.observability_log_level,
         json_logs=settings.observability_json_logs,
     )
-    response = data_analyst.invoke(
-        # for testing the ETL node
-        # {"messages":[HumanMessage(content="""
-        #                 I want to transform the data stored in the 'C:\\Users\\manic\\source\\repos\\AI\\Data Professional\\data_agent\\data\\extract\\extracted_data.csv' file
-        #                 and save the transformed data in the 'C:\\Users\\manic\\source\\repos\\AI\\Data Professional\\data_agent\\data\\transform' folder in the csv format.
-        #                 The transformation should filter the data to show bulbasaur and ivysaur pokemon only.
-        #     """)]}
-        # for testing the SQL node
-        {
-            "messages": [
-                HumanMessage(
-                    content="What are the different types of Payment Methods we have in our database"
-                )
-            ],
-            "route_response": "",
-        }
-        # for testing the API extraction node
-        # {"messages":[HumanMessage(content="I want to extract the data from the API endpoint 'https://pokeapi.co/api/v2/pokemon' and save it to data/extract folder in the csv format")]}
-    )
 
-    print(response)
+    from agents.data_analyst import data_analyst
+
+    result = data_analyst.invoke({"messages": [HumanMessage(content=args.question)]})
+    print(result["final_answer"])
+    return 0 if result["status"] != "error" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(run())

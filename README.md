@@ -29,23 +29,41 @@ SQLAlchemy models, Alembic migrations, and pandas-based ETL operations.
 
 ## Installation
 
-With `uv`:
+Install the application and its console commands from a source checkout:
 
 ```powershell
 uv sync --dev
 .venv\Scripts\Activate.ps1
 ```
 
-Alternatively, use the pinned pip requirements:
+For a runtime-only editable installation with pip:
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 `pyproject.toml` and `uv.lock` are the primary project and lock files.
-`requirements.txt` provides a pinned pip-compatible environment.
+`requirements.txt` is a pinned pip-compatible environment for reproducible
+source-checkout development.
+
+### Build distributions
+
+Build a wheel and source distribution:
+
+```powershell
+uv build
+```
+
+The artifacts are written to `dist/`. Packaging metadata explicitly includes
+the application modules and the `agents`, `agentschemas`, `models`,
+`schemas`, and `utils` packages. The source distribution also includes the
+README, environment template, Alembic configuration, and migration sources.
+
+Database seed CSV files intentionally remain repository data rather than wheel
+package data. Run seed migrations from a source checkout where `data/*.csv`
+is present.
 
 ## Configuration
 
@@ -191,8 +209,11 @@ commands, arbitrary expressions, and arbitrary file operations are not run.
 Start the development server on localhost:
 
 ```powershell
-uvicorn api:app --host 127.0.0.1 --port 8000
+data-agent-api
 ```
+
+The equivalent source-checkout command is
+`uvicorn api:app --host 127.0.0.1 --port 8000`.
 
 Interactive OpenAPI documentation is available at
 `http://127.0.0.1:8000/docs`. Check liveness with:
@@ -235,11 +256,15 @@ added.
 
 ### Python
 
-Run the example entry point:
+Submit one request through the installed CLI:
 
 ```powershell
-python main.py
+data-agent "What payment methods are available in the database?"
 ```
+
+The command prints the public final answer and exits with code 1 when the
+workflow returns `error`. The equivalent source-checkout command is
+`python main.py "your question"`.
 
 Or invoke the router directly:
 
@@ -341,6 +366,7 @@ data_agent/
 ├── tests/                  # Automated offline tests
 ├── utils/                  # Database, safety, LLM, and ETL utilities
 ├── .env.example            # Configuration template
+├── MANIFEST.in             # Source-distribution asset manifest
 ├── alembic.ini             # Alembic configuration
 ├── config.py               # Validated application settings
 ├── main.py                 # Example entry point

@@ -501,21 +501,6 @@ if __name__ == "__main__":
     with open("sql_analyst_graph.png", "wb") as f:
         f.write(graph_png)
 
-    # Try to display in Jupyter/IPython
-    try:
-        from IPython.display import Image, display
-
-        display(Image(graph_png))
-    except ImportError:
-        # If not in Jupyter, try to open with default image viewer
-        try:
-            import webbrowser
-            from pathlib import Path
-
-            webbrowser.open(f"file://{Path('sql_analyst_graph.png').absolute()}")
-        except (OSError, webbrowser.Error):
-            print("Graph image saved. Open 'sql_analyst_graph.png' to view the workflow.")
-
     input_schema = {
         "messages": [],
         "user_question": "What are the different types of vechicle types we have in our database",

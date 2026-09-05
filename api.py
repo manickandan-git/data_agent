@@ -127,3 +127,10 @@ def create_app(workflow=None, settings=None) -> FastAPI:
 
 
 app = create_app()
+
+
+def run() -> None:
+    """Run the local API server through the installed console command."""
+    import uvicorn
+
+    uvicorn.run("api:app", host="127.0.0.1", port=8000)

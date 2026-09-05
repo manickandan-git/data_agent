@@ -1,0 +1,4 @@
+include .env.example
+include alembic.ini
+include README.md
+recursive-include migrations *.py *.mako README

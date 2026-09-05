@@ -1,9 +1,4 @@
-import asyncio
-
-import aiofiles
 import asyncpg
-
-from config import get_config
 
 
 class AsyncDatabaseUtil:
@@ -146,29 +141,3 @@ class AsyncDatabaseUtil:
         if self._pool:
             await self._pool.close()
             print("Database connection pool closed.")
-
-
-# --- Execution Wrapper ---
-async def main():
-    # Replace with your actual Postgres credentials connection string
-    DATABASE_URL = get_config().require_database_url()
-
-    # Initialize the utility class
-    obj = AsyncDatabaseUtil(DATABASE_URL)
-    await obj.connect()
-
-    # 1. Fetch schema details asynchronously
-    result = await obj.schema_details(get_config().database_schema)
-
-    # 2. Write file asynchronously using aiofiles
-    async with aiofiles.open("test_schema_details.txt", "w", encoding="utf-8") as f:
-        await f.write(result)
-    print("Schema details successfully written to test_schema_details.txt")
-
-    # Clean up and close pool connections
-    await obj.close()
-
-
-if __name__ == "__main__":
-    # Start the event loop to run your asynchronous script
-    asyncio.run(main())

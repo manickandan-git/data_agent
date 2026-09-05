@@ -202,14 +202,9 @@ etl_analyst_graph.add_conditional_edges(
 etl_analyst = etl_analyst_graph.compile()
 
 if __name__ == "__main__":
-    # Compile the Graph
-
-    # Optional
-    from IPython.display import Image
-
-    img = Image(etl_analyst.get_graph().draw_mermaid_png())
+    graph_png = etl_analyst.get_graph().draw_mermaid_png()
     with open("etl_analyst_graph.png", "wb") as f:
-        f.write(img.data)
+        f.write(graph_png)
 
     # response = etl_analyst.invoke(
     #   {"messages":[HumanMessage(content="I want to extract the data from the API endpoint 'https://pokeapi.co/api/v2/pokemon' and save it to data/extract folder in the csv folder")]}

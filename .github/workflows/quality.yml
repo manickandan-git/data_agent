@@ -35,3 +35,6 @@ jobs:
 
       - name: Test with coverage
         run: uv run pytest --cov --cov-report=term-missing
+
+      - name: Build wheel and source distribution
+        run: uv build
