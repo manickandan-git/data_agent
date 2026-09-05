@@ -59,11 +59,23 @@ def test_cli_returns_nonzero_for_workflow_error(monkeypatch):
 def test_api_console_entrypoint_binds_to_localhost(monkeypatch):
     run_server = Mock()
     monkeypatch.setattr("uvicorn.run", run_server)
+    monkeypatch.setattr(
+        api,
+        "get_config",
+        lambda: SimpleNamespace(
+            api_host="0.0.0.0",
+            api_port=9000,
+            api_workers=3,
+            api_reload=False,
+        ),
+    )
 
     api.run()
 
     run_server.assert_called_once_with(
         "data_agent.api:app",
-        host="127.0.0.1",
-        port=8000,
+        host="0.0.0.0",
+        port=9000,
+        workers=3,
+        reload=False,
     )

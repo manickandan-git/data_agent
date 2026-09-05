@@ -57,6 +57,9 @@ def create_app(workflow=None, settings=None) -> FastAPI:
         title="Data Agent API",
         version="1.0.0",
         lifespan=lifespan,
+        docs_url="/docs" if current_settings().api_docs_enabled else None,
+        redoc_url="/redoc" if current_settings().api_docs_enabled else None,
+        openapi_url="/openapi.json" if current_settings().api_docs_enabled else None,
     )
 
     @application.middleware("http")
@@ -133,4 +136,11 @@ def run() -> None:
     """Run the local API server through the installed console command."""
     import uvicorn
 
-    uvicorn.run("data_agent.api:app", host="127.0.0.1", port=8000)
+    settings = get_config()
+    uvicorn.run(
+        "data_agent.api:app",
+        host=settings.api_host,
+        port=settings.api_port,
+        workers=settings.api_workers,
+        reload=settings.api_reload,
+    )

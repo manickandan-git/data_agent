@@ -16,6 +16,15 @@ def test_health_endpoint():
     assert response.json() == {"status": "ok"}
 
 
+def test_production_disables_interactive_api_documentation_by_default():
+    settings = Settings(_env_file=None, app_environment="production")
+    app = create_app(workflow=Mock(), settings=settings)
+
+    with TestClient(app) as client:
+        assert client.get("/docs").status_code == 404
+        assert client.get("/openapi.json").status_code == 404
+
+
 def test_query_endpoint_returns_standardized_workflow_result():
     workflow = Mock()
     workflow.invoke.return_value = {

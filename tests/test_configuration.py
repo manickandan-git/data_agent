@@ -3,7 +3,7 @@ from unittest.mock import Mock
 import pytest
 from pydantic import ValidationError
 
-from data_agent.config import Settings
+from data_agent.config import Settings, environment_files, get_config
 from data_agent.utils.llm_pick import (
     PROVIDERS,
     LLMFactory,
@@ -27,11 +27,17 @@ def settings_factory(monkeypatch):
 def test_defaults_do_not_require_provider_keys(settings_factory):
     settings = settings_factory()
     assert settings.llm_provider == "openai"
+    assert settings.app_environment == "development"
     assert settings.anthropic_api_key is None
     assert settings.sql_timeout_seconds == 30
     assert settings.observability_log_level == "INFO"
     assert settings.observability_json_logs is True
     assert settings.api_max_request_bytes == 16_384
+    assert settings.api_host == "127.0.0.1"
+    assert settings.api_port == 8000
+    assert settings.api_workers == 1
+    assert settings.api_reload is False
+    assert settings.api_docs_enabled is True
 
 
 def test_default_categorical_columns_cover_safe_seed_dimensions(settings_factory):
@@ -59,6 +65,9 @@ def test_secrets_are_redacted(settings_factory):
         ("database_schema", "public; DROP TABLE users"),
         ("observability_log_level", "TRACE"),
         ("api_max_request_bytes", 100),
+        ("app_environment", "local"),
+        ("api_port", 0),
+        ("api_workers", 0),
         ("sql_categorical_columns", {"payments; DROP": ["payment_method"]}),
         ("sql_categorical_columns", {"payments": ["payment_method", "payment_method"]}),
     ],
@@ -107,6 +116,46 @@ def test_invalid_provider_and_level(settings_factory):
 def test_database_configuration_required_only_when_used(settings_factory):
     with pytest.raises(ValueError, match="DATABASE_URL"):
         settings_factory().require_database_url()
+
+
+def test_profile_files_override_base_configuration(tmp_path, monkeypatch):
+    import data_agent.config as config_module
+
+    (tmp_path / ".env").write_text(
+        "APP_ENVIRONMENT=staging\nAPI_PORT=8001\nAPI_RELOAD=true\nSQL_ROW_LIMIT=20\n",
+        encoding="utf-8",
+    )
+    (tmp_path / ".env.staging").write_text(
+        "API_PORT=9000\nAPI_RELOAD=false\nSQL_ROW_LIMIT=30\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config_module, "SOURCE_ROOT", tmp_path)
+    monkeypatch.setattr(config_module, "ENV_FILES", (tmp_path / ".env",))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SQL_ROW_LIMIT", "40")
+    get_config.cache_clear()
+
+    settings = get_config()
+
+    assert settings.app_environment == "staging"
+    assert settings.api_port == 9000
+    assert settings.api_reload is False
+    assert settings.sql_row_limit == 40
+    assert environment_files("staging") == (tmp_path / ".env", tmp_path / ".env.staging")
+    get_config.cache_clear()
+
+
+def test_environment_safety_defaults_and_validation(settings_factory):
+    assert settings_factory(app_environment="production").api_docs_enabled is False
+    assert settings_factory(app_environment="staging").api_docs_enabled is True
+    assert settings_factory(app_environment="production", api_docs_enabled=True).api_docs_enabled
+
+    with pytest.raises(ValidationError, match="API_RELOAD must be disabled"):
+        settings_factory(app_environment="production", api_reload=True)
+    with pytest.raises(ValidationError, match="API_RELOAD requires API_WORKERS=1"):
+        settings_factory(api_reload=True, api_workers=2)
+    with pytest.raises(ValidationError, match="DEBUG logging"):
+        settings_factory(app_environment="production", observability_log_level="DEBUG")
 
 
 @pytest.mark.parametrize(

@@ -1,12 +1,33 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
 ENV_FILES = (SOURCE_ROOT / ".env", Path.cwd() / ".env")
+Environment = Literal["development", "test", "staging", "production"]
+
+
+def environment_files(environment: str) -> tuple[Path, ...]:
+    """Return base and profile files in increasing precedence order."""
+    roots = (SOURCE_ROOT, Path.cwd())
+    candidates = [path for root in roots for path in (root / ".env", root / f".env.{environment}")]
+    return tuple(dict.fromkeys(candidates))
+
+
+class EnvironmentSelector(BaseSettings):
+    """Resolve the profile before validating the complete configuration."""
+
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILES,
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    app_environment: Environment = "development"
 
 
 class Settings(BaseSettings):
@@ -17,6 +38,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
+    app_environment: Environment = "development"
     llm_provider: str = "openai"
     llm_model_low: str | None = None
     llm_model_medium: str | None = None
@@ -31,6 +53,11 @@ class Settings(BaseSettings):
     openai_base_url: str | None = None
     observability_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     observability_json_logs: bool = True
+    api_host: str = "127.0.0.1"
+    api_port: int = Field(default=8000, ge=1, le=65_535)
+    api_workers: int = Field(default=1, ge=1, le=32)
+    api_reload: bool = False
+    api_docs_enabled: bool | None = None
     api_max_request_bytes: int = Field(default=16_384, ge=1_024, le=1_048_576)
     database_url: SecretStr | None = None
     database_schema: str = Field(default="public", pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -69,6 +96,18 @@ class Settings(BaseSettings):
             raise ValueError("Categorical column names must be unique per table.")
         return value
 
+    @model_validator(mode="after")
+    def validate_environment_safety(self) -> Self:
+        if self.api_reload and self.api_workers != 1:
+            raise ValueError("API_RELOAD requires API_WORKERS=1.")
+        if self.app_environment in {"staging", "production"} and self.api_reload:
+            raise ValueError("API_RELOAD must be disabled in staging and production.")
+        if self.app_environment == "production" and self.observability_log_level == "DEBUG":
+            raise ValueError("DEBUG logging must be disabled in production.")
+        if self.api_docs_enabled is None:
+            self.api_docs_enabled = self.app_environment != "production"
+        return self
+
     def require_database_url(self) -> str:
         if not self.database_url or not self.database_url.get_secret_value():
             raise ValueError("DATABASE_URL is required for database operations.")
@@ -77,4 +116,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_config() -> Settings:
-    return Settings()
+    bootstrap = EnvironmentSelector(_env_file=ENV_FILES)
+    return Settings(_env_file=environment_files(bootstrap.app_environment))

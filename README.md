@@ -71,6 +71,30 @@ Copy `.env.example` to `.env`. Configuration is loaded from the repository
 directory regardless of the current working directory. Never commit real API
 keys, database credentials, or bearer tokens.
 
+### Environment profiles
+
+Set `APP_ENVIRONMENT` to `development`, `test`, `staging`, or `production`.
+The application first reads `.env` and then `.env.<environment>`, so a profile
+file can override shared settings. Operating-system environment variables take
+precedence over both files and should be used for deployed secrets.
+
+For example, keep shared non-secret defaults in `.env`, staging overrides in
+`.env.staging`, and configure the deployment with:
+
+```dotenv
+APP_ENVIRONMENT=staging
+```
+
+Do not commit `.env` or `.env.<environment>` files containing secrets. The
+`test` profile is intended for automated tests, not for weakening validation.
+
+The API server is configured with `API_HOST`, `API_PORT`, `API_WORKERS`, and
+`API_RELOAD`. Reload cannot be combined with multiple workers and is rejected
+in staging and production. Production also rejects debug logging and disables
+the interactive `/docs`, `/redoc`, and `/openapi.json` routes by default. Set
+`API_DOCS_ENABLED=true` only when those routes are intentionally exposed behind
+appropriate access controls.
+
 ### LLM providers
 
 OpenAI is the default:
