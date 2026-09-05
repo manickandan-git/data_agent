@@ -4,9 +4,9 @@ Revision ID: a86b191887cf
 Revises: c8e2638fcf8a
 Create Date: 2026-09-01 13:21:25.394300
 """
-import os
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import pandas as pd
 from alembic import op
@@ -17,6 +17,8 @@ revision = 'a86b191887cf'
 down_revision = 'c8e2638fcf8a'
 branch_labels = None
 depends_on = None
+
+DATA_DIRECTORY = Path(__file__).resolve().parents[2] / "data"
 
 
 def clean_val(val, target_type=str):
@@ -44,13 +46,11 @@ def clean_val(val, target_type=str):
 
 def upgrade() -> None:
     bind = op.get_bind()
-    csv_dir = "./data"
-
     print("\n[Start Data Migration] Loading CSV datasets into PostgreSQL...")
 
     # --- 1. USERS ---
     print(" -> Ingesting users.csv...")
-    users_df = pd.read_csv(os.path.join(csv_dir, "users.csv"))
+    users_df = pd.read_csv(DATA_DIRECTORY / "users.csv")
     for _, row in users_df.iterrows():
         params = {
             "user_id": int(row["user_id"]),
@@ -75,7 +75,7 @@ def upgrade() -> None:
 
     # --- 2. VEHICLES ---
     print(" -> Ingesting vehicles.csv...")
-    vehicles_df = pd.read_csv(os.path.join(csv_dir, "vehicles.csv"))
+    vehicles_df = pd.read_csv(DATA_DIRECTORY / "vehicles.csv")
     for _, row in vehicles_df.iterrows():
         params = {
             "vehicle_id": int(row["vehicle_id"]),
@@ -98,7 +98,7 @@ def upgrade() -> None:
 
     # --- 3. RIDES ---
     print(" -> Ingesting rides.csv...")
-    rides_df = pd.read_csv(os.path.join(csv_dir, "rides.csv"))
+    rides_df = pd.read_csv(DATA_DIRECTORY / "rides.csv")
     for _, row in rides_df.iterrows():
         params = {
             "ride_id": int(row["ride_id"]),
@@ -128,7 +128,7 @@ def upgrade() -> None:
 
     # --- 4. PAYMENTS ---
     print(" -> Ingesting payments.csv...")
-    payments_df = pd.read_csv(os.path.join(csv_dir, "payments.csv"))
+    payments_df = pd.read_csv(DATA_DIRECTORY / "payments.csv")
     for _, row in payments_df.iterrows():
         params = {
             "payment_id": int(row["payment_id"]),
@@ -151,7 +151,7 @@ def upgrade() -> None:
 
     # --- 5. RATINGS ---
     print(" -> Ingesting ratings.csv...")
-    ratings_df = pd.read_csv(os.path.join(csv_dir, "ratings.csv"))
+    ratings_df = pd.read_csv(DATA_DIRECTORY / "ratings.csv")
     for _, row in ratings_df.iterrows():
         params = {
             "rating_id": int(row["rating_id"]),
@@ -176,4 +176,3 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(text("TRUNCATE TABLE public.ratings, public.payments, public.rides, public.vehicles, public.users CASCADE"))
-
