@@ -34,7 +34,10 @@ def test_safety_edge_routes_to_expected_node(answer, expected_node):
     [
         "SELECT * FROM users",
         "SELECT 'DELETE FROM users' AS harmless_text",
+        "SELECT ';' AS harmless_semicolon",
+        "SELECT $$DROP TABLE users$$ AS harmless_dollar_text",
         "SELECT 1 /* UPDATE users SET is_active = false */",
+        "SELECT 1 /* outer /* DELETE */ comment */",
         "WITH active_users AS (SELECT * FROM users) SELECT * FROM active_users;",
     ],
 )
@@ -57,6 +60,7 @@ def test_deterministic_safety_allows_read_only_queries(query):
         ("SELECT * FROM users FOR UPDATE", "UPDATE"),
         ("SELECT * FROM users FOR KEY SHARE", "Row-locking"),
         ("SELECT pg_sleep(60)", "PG_SLEEP"),
+        ("SELECT pg_read_file('/etc/passwd')", "PG_READ_FILE"),
     ],
 )
 def test_deterministic_safety_blocks_unsafe_queries(query, reason):

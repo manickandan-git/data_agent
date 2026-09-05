@@ -36,9 +36,7 @@ def configure_observability(level: str = "INFO", *, json_logs: bool = True) -> N
     handler.setFormatter(
         JsonFormatter()
         if json_logs
-        else logging.Formatter(
-            "%(asctime)s %(levelname)s %(name)s %(message)s"
-        )
+        else logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
     )
     logger.addHandler(handler)
     logger.setLevel(level.upper())
@@ -71,6 +69,7 @@ def log_event(
 
 def observed_node(workflow: str, node: str, function: Callable) -> Callable:
     """Wrap a synchronous graph node with safe lifecycle and timing events."""
+
     @wraps(function)
     def wrapper(state):
         run_id = ensure_run_id(state)

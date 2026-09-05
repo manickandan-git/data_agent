@@ -11,11 +11,9 @@ if TYPE_CHECKING:
 
 class Vehicle(Base):
     __tablename__ = "vehicles"
-    
+
     # Typed as ClassVar tuple to clear linter warnings; schema is inherited
-    __table_args__: ClassVar[tuple] = (
-        Index("idx_vehicles_driver_id", "driver_id"),
-    )
+    __table_args__: ClassVar[tuple] = (Index("idx_vehicles_driver_id", "driver_id"),)
 
     vehicle_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     driver_id: Mapped[int] = mapped_column(

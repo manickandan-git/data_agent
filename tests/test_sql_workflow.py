@@ -13,18 +13,23 @@ from agentschemas.question import QuestionReview
 def workflow(monkeypatch):
     module = importlib.import_module("agents.sql_analyst")
     settings = SimpleNamespace(
-        require_database_url=lambda: "test-dsn", database_schema="public",
-        sql_row_limit=10, sql_timeout_seconds=30,
+        require_database_url=lambda: "test-dsn",
+        database_schema="public",
+        sql_row_limit=10,
+        sql_timeout_seconds=30,
         sql_categorical_columns={"payments": ["payment_method"]},
         sql_categorical_value_limit=50,
     )
     database = SimpleNamespace(
-        connect=AsyncMock(), close=AsyncMock(),
-        schema_details=AsyncMock(return_value=(
-            "Table: users; Column: user_id integer\nTable: payments; "
-            "Column: payment_method text\nAllowed values for payment_method: "
-            "'credit_card', 'cash'"
-        )),
+        connect=AsyncMock(),
+        close=AsyncMock(),
+        schema_details=AsyncMock(
+            return_value=(
+                "Table: users; Column: user_id integer\nTable: payments; "
+                "Column: payment_method text\nAllowed values for payment_method: "
+                "'credit_card', 'cash'"
+            )
+        ),
         execute_read_only_sql=AsyncMock(return_value="[(1,)]"),
     )
     generation = Mock()
@@ -35,10 +40,17 @@ def workflow(monkeypatch):
     judge.invoke.return_value = JudgeSchema(answer="Yes", comments="Relevant")
     monkeypatch.setattr(module, "get_config", lambda: settings)
     monkeypatch.setattr(module, "AsyncDatabaseUtil", lambda *_: database)
-    monkeypatch.setattr(module, "pick_llm", lambda level: generation if level == "medium" else summary)
+    monkeypatch.setattr(
+        module, "pick_llm", lambda level: generation if level == "medium" else summary
+    )
     question_validator = Mock()
-    question_validator.invoke.return_value = QuestionReview(status="clear", message="The users table supports the request.")
-    module_test_models = lambda level, schema: question_validator if schema is QuestionReview else judge
+    question_validator.invoke.return_value = QuestionReview(
+        status="clear", message="The users table supports the request."
+    )
+
+    def module_test_models(level, schema):
+        return question_validator if schema is QuestionReview else judge
+
     monkeypatch.setattr(module, "structured_llm", module_test_models)
     return module, database, generation, summary, judge
 
@@ -52,7 +64,8 @@ def test_success_generates_once_and_does_not_duplicate_messages(workflow):
     generation.invoke.assert_called_once()
     summary.invoke.assert_called_once()
     database.schema_details.assert_awaited_once_with(
-        "public", include_samples=False,
+        "public",
+        include_samples=False,
         categorical_columns={"payments": ["payment_method"]},
         categorical_value_limit=50,
     )
@@ -60,9 +73,13 @@ def test_success_generates_once_and_does_not_duplicate_messages(workflow):
     assert database.close.await_count == 2
 
 
-@pytest.mark.parametrize("result_value,expected", [
-    (None, "database query failed"), ("[]", "No matching records"),
-])
+@pytest.mark.parametrize(
+    "result_value,expected",
+    [
+        (None, "database query failed"),
+        ("[]", "No matching records"),
+    ],
+)
 def test_failed_and_empty_results_skip_summary(workflow, result_value, expected):
     module, database, _, summary, _ = workflow
     database.execute_read_only_sql.return_value = result_value
@@ -99,26 +116,31 @@ def test_empty_question_never_connects(workflow):
 
 def test_execution_requires_approval(workflow):
     module, database, _, _, _ = workflow
-    result = module.execute_sql_query(AgentSchema(
-        messages=[], user_question="Show users", generated_sql_query="SELECT 1",
-    ))
+    result = module.execute_sql_query(
+        AgentSchema(
+            messages=[],
+            user_question="Show users",
+            generated_sql_query="SELECT 1",
+        )
+    )
     assert result.workflow_error
     database.connect.assert_not_awaited()
 
 
-@pytest.mark.parametrize("status,message", [
-    ("ambiguous", "Do you mean highest rating or most completed rides?"),
-    ("unsupported", "This database does not contain weather observations."),
-])
+@pytest.mark.parametrize(
+    "status,message",
+    [
+        ("ambiguous", "Do you mean highest rating or most completed rides?"),
+        ("unsupported", "This database does not contain weather observations."),
+    ],
+)
 def test_question_review_stops_before_sql(workflow, status, message):
     module, database, generation, summary, judge = workflow
     validator = module.structured_llm("medium", QuestionReview)
     validator.invoke.return_value = QuestionReview(status=status, message=message)
     result = module.sql_analyst.invoke({"messages": [], "user_question": "Who is best?"})
     assert result["question_status"] == status
-    assert result["status"] == (
-        "needs_clarification" if status == "ambiguous" else "rejected"
-    )
+    assert result["status"] == ("needs_clarification" if status == "ambiguous" else "rejected")
     assert result["final_answer"] == message
     assert result["generated_sql_query"] == ""
     assert len(result["messages"]) == 2
@@ -128,7 +150,10 @@ def test_question_review_stops_before_sql(workflow, status, message):
     database.execute_read_only_sql.assert_not_awaited()
 
 
-@pytest.mark.parametrize("invalid", [None, {"status": "clear", "message": "   "}, {"status": "maybe", "message": "unknown"}])
+@pytest.mark.parametrize(
+    "invalid",
+    [None, {"status": "clear", "message": "   "}, {"status": "maybe", "message": "unknown"}],
+)
 def test_question_validation_fails_closed(workflow, invalid):
     module, database, generation, _, _ = workflow
     module.structured_llm("medium", QuestionReview).invoke.return_value = invalid
@@ -152,14 +177,15 @@ def test_question_review_receives_schema_and_preserves_request(workflow):
 
 def test_categorical_values_ground_generation_and_judgment(workflow):
     module, _, generation, _, judge = workflow
-    generation.invoke.return_value = AIMessage(content=(
-        "SELECT SUM(amount) FROM payments "
-        "WHERE payment_method = 'credit_card'"
-    ))
-    result = module.sql_analyst.invoke({
-        "messages": [],
-        "user_question": "What is the sum of all credit card transactions?",
-    })
+    generation.invoke.return_value = AIMessage(
+        content=("SELECT SUM(amount) FROM payments WHERE payment_method = 'credit_card'")
+    )
+    result = module.sql_analyst.invoke(
+        {
+            "messages": [],
+            "user_question": "What is the sum of all credit card transactions?",
+        }
+    )
     generation_prompt = generation.invoke.call_args.args[0]
     judge_prompt = judge.invoke.call_args.args[0]
     value_context = "Allowed values for payment_method: 'credit_card', 'cash'"

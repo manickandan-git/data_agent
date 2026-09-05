@@ -17,6 +17,7 @@ from utils.llm_pick import (
 def settings_factory(monkeypatch):
     # Do not read developer credentials or machine-specific settings.
     import os
+
     for name in list(os.environ):
         if name.lower() in Settings.model_fields:
             monkeypatch.delenv(name)
@@ -49,14 +50,19 @@ def test_secrets_are_redacted(settings_factory):
     assert "private-value" not in settings.model_dump_json()
 
 
-@pytest.mark.parametrize("field,value", [
-    ("sql_timeout_seconds", 0), ("sql_row_limit", -1),
-    ("llm_max_retries", -1), ("database_schema", "public; DROP TABLE users"),
-    ("observability_log_level", "TRACE"),
-    ("api_max_request_bytes", 100),
-    ("sql_categorical_columns", {"payments; DROP": ["payment_method"]}),
-    ("sql_categorical_columns", {"payments": ["payment_method", "payment_method"]}),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("sql_timeout_seconds", 0),
+        ("sql_row_limit", -1),
+        ("llm_max_retries", -1),
+        ("database_schema", "public; DROP TABLE users"),
+        ("observability_log_level", "TRACE"),
+        ("api_max_request_bytes", 100),
+        ("sql_categorical_columns", {"payments; DROP": ["payment_method"]}),
+        ("sql_categorical_columns", {"payments": ["payment_method", "payment_method"]}),
+    ],
+)
 def test_invalid_configuration_is_rejected(settings_factory, field, value):
     with pytest.raises(ValidationError):
         settings_factory(**{field: value})
@@ -103,19 +109,31 @@ def test_database_configuration_required_only_when_used(settings_factory):
         settings_factory().require_database_url()
 
 
-@pytest.mark.parametrize("provider,module,constructor,key_field", [
-    ("openai", "langchain_openai", "ChatOpenAI", "openai_api_key"),
-    ("anthropic", "langchain_anthropic", "ChatAnthropic", "anthropic_api_key"),
-])
+@pytest.mark.parametrize(
+    "provider,module,constructor,key_field",
+    [
+        ("openai", "langchain_openai", "ChatOpenAI", "openai_api_key"),
+        ("anthropic", "langchain_anthropic", "ChatAnthropic", "anthropic_api_key"),
+    ],
+)
 def test_native_adapter_forwards_configuration(
-    settings_factory, monkeypatch, provider, module, constructor, key_field,
+    settings_factory,
+    monkeypatch,
+    provider,
+    module,
+    constructor,
+    key_field,
 ):
     import importlib
+
     builder = Mock()
     monkeypatch.setattr(importlib.import_module(module), constructor, builder)
     settings = settings_factory(
-        llm_provider=provider, llm_model_medium="configured-model",
-        llm_timeout_seconds=12, llm_max_retries=1, **{key_field: "test-key"},
+        llm_provider=provider,
+        llm_model_medium="configured-model",
+        llm_timeout_seconds=12,
+        llm_max_retries=1,
+        **{key_field: "test-key"},
     )
     pick_llm("medium", settings)
     assert builder.call_args.kwargs["model"] == "configured-model"
@@ -133,10 +151,14 @@ def test_factory_reuses_clients(settings_factory, monkeypatch):
     assert builder.call_args.args[1] == "gpt-5.6-terra"
 
 
-@pytest.mark.parametrize("level,model", [
-    ("low", "gpt-5.6-luna"), ("medium", "gpt-5.6-terra"),
-    ("high", "gpt-5.6-sol"),
-])
+@pytest.mark.parametrize(
+    "level,model",
+    [
+        ("low", "gpt-5.6-luna"),
+        ("medium", "gpt-5.6-terra"),
+        ("high", "gpt-5.6-sol"),
+    ],
+)
 def test_modern_request_payload_offline(settings_factory, level, model):
     settings = settings_factory(openai_api_key="test-key")
     client = pick_llm(level, settings)
@@ -150,9 +172,14 @@ def test_modern_request_payload_offline(settings_factory, level, model):
 
 
 def test_legacy_override_retains_chat_parameters(settings_factory):
-    client = pick_llm("low", settings_factory(
-        openai_api_key="test-key", llm_model_low="gpt-4o", llm_temperature=0.2,
-    ))
+    client = pick_llm(
+        "low",
+        settings_factory(
+            openai_api_key="test-key",
+            llm_model_low="gpt-4o",
+            llm_temperature=0.2,
+        ),
+    )
     payload = client._get_request_payload("hello")
     assert "messages" in payload
     assert payload["temperature"] == 0.2

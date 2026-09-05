@@ -247,11 +247,9 @@ Or invoke the router directly:
 from langchain_core.messages import HumanMessage
 from agents.data_analyst import data_analyst
 
-result = data_analyst.invoke({
-    "messages": [HumanMessage(
-        content="What payment methods are available in the database?"
-    )]
-})
+result = data_analyst.invoke(
+    {"messages": [HumanMessage(content="What payment methods are available in the database?")]}
+)
 print(result)
 ```
 
@@ -372,6 +370,25 @@ python -m pytest -q
 Tests isolate machine-specific `.env` values and mock model, database, and
 network boundaries where appropriate. They do not require a live API, live
 database, or real provider key.
+
+## Quality controls
+
+Run the same local gates enforced by GitHub Actions:
+
+```powershell
+ruff check .
+ruff format --check .
+python -m pytest --cov --cov-report=term-missing
+```
+
+Ruff enforces syntax, import ordering, undefined-name, and formatting rules for
+Python 3.13. Coverage measures branches as well as statements and requires at
+least 85% across the application modules. Direct-execution demonstration blocks
+are excluded from coverage.
+
+The `.github/workflows/quality.yml` workflow installs the locked environment
+and runs all three gates for every push and pull request. The job has read-only
+repository permissions and a 15-minute timeout.
 
 ## Graph images
 

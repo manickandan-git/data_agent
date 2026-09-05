@@ -10,7 +10,7 @@ from utils.observability import observed_node
 # ---------------------------- DATA AGENT GRAPH ---------------------------- #
 
 
-def router_node(state:DataSchema):
+def router_node(state: DataSchema):
 
     message = state.messages[-1].content
 
@@ -23,13 +23,14 @@ def router_node(state:DataSchema):
         state.messages = state.messages + [AIMessage(content=state.final_answer)]
         return state
 
-    route_response = route_response_dict['answer']
+    route_response = route_response_dict["answer"]
 
     state.route_response = route_response
 
     return state
 
-def etl_node(state:DataSchema):
+
+def etl_node(state: DataSchema):
 
     message = state.messages[-1].content
 
@@ -46,7 +47,8 @@ def etl_node(state:DataSchema):
 
     return state
 
-def sql_node(state:DataSchema):
+
+def sql_node(state: DataSchema):
 
     message = state.messages[-1].content
 
@@ -60,7 +62,7 @@ def sql_node(state:DataSchema):
         "is_safe": "No",
         "comments": "",
         "sql_query_execution_result": "",
-        "final_answer": ""
+        "final_answer": "",
     }
 
     try:
@@ -83,15 +85,15 @@ def _workflow_failure(state: DataSchema, message: str) -> DataSchema:
     state.messages = state.messages + [AIMessage(content=message)]
     return state
 
+
 data_agent_graph = StateGraph(DataSchema)
 
-data_agent_graph.add_node(
-    "router_node", observed_node("data", "router_node", router_node)
-)
+data_agent_graph.add_node("router_node", observed_node("data", "router_node", router_node))
 data_agent_graph.add_node("etl_node", observed_node("data", "etl_node", etl_node))
 data_agent_graph.add_node("sql_node", observed_node("data", "sql_node", sql_node))
 
 data_agent_graph.add_edge(START, "router_node")
+
 
 def route_edge(state: DataSchema) -> str:
     if state.status == "error":
@@ -104,17 +106,19 @@ def route_edge(state: DataSchema) -> str:
         raise ValueError(f"Invalid route response: {state.route_response}")
 
 
-data_agent_graph.add_conditional_edges("router_node", route_edge,
-                                      {
-                                          "sql_node": "sql_node",
-                                          "etl_node": "etl_node",
-                                          "end": END,
-                                      })
+data_agent_graph.add_conditional_edges(
+    "router_node",
+    route_edge,
+    {
+        "sql_node": "sql_node",
+        "etl_node": "etl_node",
+        "end": END,
+    },
+)
 
 data_analyst = data_agent_graph.compile()
 
 if __name__ == "__main__":
-
     graph_png = data_analyst.get_graph().draw_mermaid_png()
     with open("data_agent_graph.png", "wb") as f:
         f.write(graph_png)
@@ -122,23 +126,21 @@ if __name__ == "__main__":
     response = data_analyst.invoke(
         # for testing the ETL node
         # {"messages":[HumanMessage(content="""
-        #              I want to transform the data stored in the 'C:\\Users\\manic\\source\\repos\\AI\\Data Professional\\data_agent\\data\\extract\\extracted_data.csv' file 
+        #              I want to transform the data stored in the 'C:\\Users\\manic\\source\\repos\\AI\\Data Professional\\data_agent\\data\\extract\\extracted_data.csv' file
         #              and save the transformed data in the 'C:\\Users\\manic\\source\\repos\\AI\\Data Professional\\data_agent\\data\\transform' folder in the csv format.
         #              The transformation should filter the data to show bulbasaur and ivysaur pokemon only.
         #     """)]}
-
         # for testing the SQL node
-        {"messages":[HumanMessage(content="For all payment records with payment_time during April 2026, show the sum of amount grouped by payment_method, including every payment status. Also show the number of rides with status completed whose dropoff_time occurred during December 2025.")],
-        "route_response": "sql"}
-        
-        
+        {
+            "messages": [
+                HumanMessage(
+                    content="For all payment records with payment_time during April 2026, show the sum of amount grouped by payment_method, including every payment status. Also show the number of rides with status completed whose dropoff_time occurred during December 2025."
+                )
+            ],
+            "route_response": "sql",
+        }
         # for testing the API extraction node
         # {"messages":[HumanMessage(content="I want to extract the data from the API endpoint 'https://pokeapi.co/api/v2/pokemon' and save it to data/extract folder in the csv format")]}
-
-
     )
 
     print(response)
-
-
-

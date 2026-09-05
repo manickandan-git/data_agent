@@ -28,16 +28,21 @@ def _openai(settings: Settings, model: str):
     # legacy/custom model overrides and their existing request contract.
     modern = model.startswith("gpt-5.6")
     options = (
-        {"reasoning": {"effort": settings.openai_reasoning_effort},
-         "use_responses_api": True, "output_version": "v0"}
-        if modern else {"temperature": settings.llm_temperature,
-                        "use_responses_api": False}
+        {
+            "reasoning": {"effort": settings.openai_reasoning_effort},
+            "use_responses_api": True,
+            "output_version": "v0",
+        }
+        if modern
+        else {"temperature": settings.llm_temperature, "use_responses_api": False}
     )
     return ChatOpenAI(
-        model=model, api_key=_key(settings, "openai_api_key"),
+        model=model,
+        api_key=_key(settings, "openai_api_key"),
         base_url=settings.openai_base_url or None,
         timeout=settings.llm_timeout_seconds,
-        max_retries=settings.llm_max_retries, max_tokens=settings.llm_max_tokens,
+        max_retries=settings.llm_max_retries,
+        max_tokens=settings.llm_max_tokens,
         **options,
     )
 
@@ -46,9 +51,12 @@ def _anthropic(settings: Settings, model: str):
     from langchain_anthropic import ChatAnthropic
 
     return ChatAnthropic(
-        model=model, api_key=_key(settings, "anthropic_api_key"),
-        temperature=settings.llm_temperature, timeout=settings.llm_timeout_seconds,
-        max_retries=settings.llm_max_retries, max_tokens=settings.llm_max_tokens,
+        model=model,
+        api_key=_key(settings, "anthropic_api_key"),
+        temperature=settings.llm_temperature,
+        timeout=settings.llm_timeout_seconds,
+        max_retries=settings.llm_max_retries,
+        max_tokens=settings.llm_max_tokens,
     )
 
 
@@ -57,7 +65,9 @@ PROVIDERS = {
     "anthropic": ProviderAdapter(_anthropic),
 }
 OPENAI_DEFAULTS = {
-    "low": "gpt-5.6-luna", "medium": "gpt-5.6-terra", "high": "gpt-5.6-sol",
+    "low": "gpt-5.6-luna",
+    "medium": "gpt-5.6-terra",
+    "high": "gpt-5.6-sol",
 }
 
 

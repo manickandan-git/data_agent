@@ -7,7 +7,6 @@ from config import get_config
 
 
 class AsyncDatabaseUtil:
-
     def __init__(self, database_url):
         self.database_url = database_url
         self._pool = None
@@ -19,13 +18,17 @@ class AsyncDatabaseUtil:
                 # Using a pool is highly recommended over single connections in asyncpg
                 self._pool = await asyncpg.create_pool(self.database_url)
                 print("Database connection pool established.")
-            except (asyncpg.InvalidDSNError, asyncpg.AuthenticationFailureError, OSError) as e:
+            except (asyncpg.PostgresError, ValueError, OSError) as e:
                 print(f"Error creating connection pool: {e}")
                 self._pool = None
 
     async def schema_details(
-        self, schema_name, *, include_samples=True,
-        categorical_columns=None, categorical_value_limit=50,
+        self,
+        schema_name,
+        *,
+        include_samples=True,
+        categorical_columns=None,
+        categorical_value_limit=50,
     ):
         if not self._pool:
             return "Error: No active database connection pool. Call connect() first."
@@ -55,16 +58,18 @@ class AsyncDatabaseUtil:
                         WHERE table_schema = $1 AND table_name = $2
                         ORDER BY ordinal_position;
                     """
-                    columns_list = await connection.fetch(
-                        columns_query, schema_name, table_name
-                    )
+                    columns_list = await connection.fetch(columns_query, schema_name, table_name)
 
                     for col_record in columns_list:
                         column_name = col_record["column_name"]
                         data_type = col_record["data_type"]
                         schema_info_context += f"  Column: {column_name}, Data Type: {data_type}\n"
 
-                    allowed = set(categorical_columns.get(table_name, [])) if categorical_columns else set()
+                    allowed = (
+                        set(categorical_columns.get(table_name, []))
+                        if categorical_columns
+                        else set()
+                    )
                     actual = {record["column_name"] for record in columns_list}
                     for column_name in sorted(allowed & actual):
                         safe_column = asyncpg.utils._quote_ident(column_name)
@@ -76,7 +81,9 @@ class AsyncDatabaseUtil:
                             categorical_value_limit,
                         )
                         rendered = ", ".join(repr(row["value"]) for row in values)
-                        schema_info_context += f"  Allowed values for {column_name}: {rendered or '(none found)'}\n"
+                        schema_info_context += (
+                            f"  Allowed values for {column_name}: {rendered or '(none found)'}\n"
+                        )
 
                     if not include_samples:
                         continue
@@ -87,9 +94,7 @@ class AsyncDatabaseUtil:
                     safe_schema = asyncpg.utils._quote_ident(schema_name)
                     safe_table = asyncpg.utils._quote_ident(table_name)
 
-                    sample_query = (
-                        f"SELECT * FROM {safe_schema}.{safe_table} LIMIT 5;"
-                    )
+                    sample_query = f"SELECT * FROM {safe_schema}.{safe_table} LIMIT 5;"
                     sample_data = await connection.fetch(sample_query)
 
                     for row in sample_data:
@@ -111,10 +116,7 @@ class AsyncDatabaseUtil:
         async with self._pool.acquire() as connection:
             try:
                 # asyncpg separates data fetching from structural updates automatically
-                if (
-                    query.strip().lower().startswith("select")
-                    or "returning" in query.lower()
-                ):
+                if query.strip().lower().startswith("select") or "returning" in query.lower():
                     result = await connection.fetch(query, *args)
                     return str([tuple(r.values()) for r in result])
                 else:

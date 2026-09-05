@@ -52,13 +52,19 @@ def fetch_records(url, records_path="results", next_path="next", settings=None):
             for attempt in range(settings.etl_max_retries + 1):
                 retryable = False
                 try:
-                    with session.get(url, headers=headers, timeout=settings.etl_timeout_seconds,
-                                     allow_redirects=False) as response:
+                    with session.get(
+                        url,
+                        headers=headers,
+                        timeout=settings.etl_timeout_seconds,
+                        allow_redirects=False,
+                    ) as response:
                         status = response.status_code
                         if status == 429 or 500 <= status <= 599:
                             retryable = True
                         elif 300 <= status <= 399:
-                            raise ExtractionError("Redirects are disabled; supply the final HTTPS endpoint.")
+                            raise ExtractionError(
+                                "Redirects are disabled; supply the final HTTPS endpoint."
+                            )
                         elif status >= 400:
                             raise ExtractionError(f"API request failed with HTTP {status}.")
                         else:
@@ -74,7 +80,7 @@ def fetch_records(url, records_path="results", next_path="next", settings=None):
                     break
                 if attempt == settings.etl_max_retries:
                     raise ExtractionError("API request failed after bounded retries.")
-                time.sleep(min(2 ** attempt, 8))
+                time.sleep(min(2**attempt, 8))
 
             records = at_path(payload, records_path)
             if not isinstance(records, list) or any(not isinstance(row, dict) for row in records):
@@ -85,7 +91,11 @@ def fetch_records(url, records_path="results", next_path="next", settings=None):
             if not next_path or (next_path == "next" and isinstance(payload, list)):
                 return rows
             # An absent top-level 'next' means a single page, for backwards compatibility.
-            next_url = payload.get("next") if next_path == "next" and isinstance(payload, dict) else at_path(payload, next_path)
+            next_url = (
+                payload.get("next")
+                if next_path == "next" and isinstance(payload, dict)
+                else at_path(payload, next_path)
+            )
             if next_url is None or next_url == "":
                 return rows
             if not isinstance(next_url, str):

@@ -34,16 +34,16 @@ def test_extract_load_writes_api_results_to_csv(monkeypatch, tmp_path):
 
     output_file = extract_folder / "extracted_data.csv"
     assert output_file.exists()
-    assert pd.read_csv(output_file).to_dict("records") == [
-        {"name": "bulbasaur", "id": 1}
-    ]
+    assert pd.read_csv(output_file).to_dict("records") == [{"name": "bulbasaur", "id": 1}]
     assert "Data successfully extracted" in result
 
 
 def test_extract_load_reports_request_failure(monkeypatch, tmp_path):
     from utils.api_extractor import ExtractionError
+
     def fail(*_):
         raise ExtractionError("API request failed.")
+
     monkeypatch.setattr("utils.etl_tools.fetch_records", fail)
 
     result = ETLTools(data_root=tmp_path).extract_load(
@@ -115,9 +115,7 @@ def test_transform_load_applies_validated_plan(tmp_path):
         limit=2,
     )
 
-    result = ETLTools(data_root=tmp_path).transform_load(
-        str(source), str(output), "csv", plan
-    )
+    result = ETLTools(data_root=tmp_path).transform_load(str(source), str(output), "csv", plan)
 
     transformed = pd.read_csv(output / "transformed_data.csv")
     assert transformed.to_dict("records") == [
@@ -149,13 +147,66 @@ def test_string_filter_is_literal_not_regex(tmp_path):
     source = tmp_path / "source.csv"
     output = tmp_path / "transform" / "output"
     pd.DataFrame({"value": ["a.b", "axb"]}).to_csv(source, index=False)
-    plan = TransformationPlan(
-        filters=[FilterRule(column="value", operator="contains", value=".")]
-    )
+    plan = TransformationPlan(filters=[FilterRule(column="value", operator="contains", value=".")])
 
     ETLTools(data_root=tmp_path).transform_load(str(source), str(output), "csv", plan)
 
     assert pd.read_csv(output / "transformed_data.csv")["value"].tolist() == ["a.b"]
+
+
+@pytest.mark.parametrize(
+    ("operator", "value", "expected"),
+    [
+        ("eq", 2, [2]),
+        ("ne", 2, [1, 3]),
+        ("gt", 1, [2, 3]),
+        ("ge", 2, [2, 3]),
+        ("lt", 3, [1, 2]),
+        ("le", 2, [1, 2]),
+        ("in", [1, 3], [1, 3]),
+        ("not_in", [2], [1, 3]),
+        ("is_null", None, []),
+        ("not_null", None, [1, 2, 3]),
+    ],
+)
+def test_filter_operators(operator, value, expected):
+    frame = pd.DataFrame({"value": [1, 2, 3]})
+    rule = FilterRule(column="value", operator=operator, value=value)
+
+    result = ETLTools._apply_filter(frame, rule)
+
+    assert result["value"].tolist() == expected
+
+
+@pytest.mark.parametrize(
+    ("operator", "value", "expected"),
+    [
+        ("contains", "PH", ["Alpha"]),
+        ("starts_with", "al", ["Alpha"]),
+        ("ends_with", "TA", ["beta"]),
+    ],
+)
+def test_case_insensitive_text_filter_operators(operator, value, expected):
+    frame = pd.DataFrame({"value": ["Alpha", "beta", "gamma"]})
+    rule = FilterRule(column="value", operator=operator, value=value)
+
+    result = ETLTools._apply_filter(frame, rule)
+
+    assert result["value"].tolist() == expected
+
+
+def test_json_transform_input_and_output(tmp_path):
+    source = tmp_path / "source.json"
+    output = tmp_path / "transform"
+    pd.DataFrame({"value": [1, 2]}).to_json(source, orient="records", lines=True)
+
+    ETLTools(data_root=tmp_path).transform_load(
+        str(source), str(output), "json", TransformationPlan(limit=1)
+    )
+
+    assert pd.read_json(output / "transformed_data.json", lines=True).to_dict("records") == [
+        {"value": 1}
+    ]
 
 
 def test_extract_load_blocks_output_outside_extract_directory(tmp_path):

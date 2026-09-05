@@ -40,6 +40,7 @@ def _default_workflow():
 
 def create_app(workflow=None, settings=None) -> FastAPI:
     """Build an API app; an injected workflow keeps endpoint tests offline."""
+
     def current_settings():
         return settings or get_config()
 

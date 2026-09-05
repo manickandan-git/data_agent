@@ -116,8 +116,7 @@ def _strip_literals_and_comments(query: str) -> str:
                     break
                 block_end = end + len(delimiter)
                 output.extend(
-                    "\n" if character in "\r\n" else " "
-                    for character in query[index:block_end]
+                    "\n" if character in "\r\n" else " " for character in query[index:block_end]
                 )
                 index = block_end
                 continue

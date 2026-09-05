@@ -31,10 +31,7 @@ def get_database_url() -> str:
         database_url = config.get_main_option("sqlalchemy.url")
 
     if not database_url:
-        raise RuntimeError(
-            "DATABASE_URL is not set and sqlalchemy.url is missing "
-            "from alembic.ini"
-        )
+        raise RuntimeError("DATABASE_URL is not set and sqlalchemy.url is missing from alembic.ini")
 
     return database_url
 

@@ -33,7 +33,10 @@ def test_pagination_and_request_bounds(transport):
         response({"results": [{"id": 1}], "next": "/items?page=2"}),
         response({"results": [{"id": 2}], "next": None}),
     ]
-    assert fetch_records("https://example.test/items", settings=settings()) == [{"id": 1}, {"id": 2}]
+    assert fetch_records("https://example.test/items", settings=settings()) == [
+        {"id": 1},
+        {"id": 2},
+    ]
     assert transport.get.call_count == 2
     assert transport.get.call_args.kwargs["allow_redirects"] is False
     assert transport.get.call_args.kwargs["timeout"] == 30
@@ -54,18 +57,23 @@ def test_permanent_failure_not_retried(transport):
     assert transport.get.call_count == 1
 
 
-@pytest.mark.parametrize("payload,path", [([{"id": 1}], ""), ({"data": {"items": [{"id": 1}]}}, "data.items")])
+@pytest.mark.parametrize(
+    "payload,path", [([{"id": 1}], ""), ({"data": {"items": [{"id": 1}]}}, "data.items")]
+)
 def test_alternate_record_paths(transport, payload, path):
     transport.get.return_value = response(payload)
     assert fetch_records("https://example.test/items", path, "", settings()) == [{"id": 1}]
 
 
-@pytest.mark.parametrize("payload,match", [
-    ({"results": "bad"}, "array of objects"),
-    ({"missing": []}, "JSON path"),
-    ({"results": [], "next": "https://other.test/items"}, "Cross-origin"),
-    ({"results": [], "next": "/items"}, "cycle"),
-])
+@pytest.mark.parametrize(
+    "payload,match",
+    [
+        ({"results": "bad"}, "array of objects"),
+        ({"missing": []}, "JSON path"),
+        ({"results": [], "next": "https://other.test/items"}, "Cross-origin"),
+        ({"results": [], "next": "/items"}, "cycle"),
+    ],
+)
 def test_malformed_data_and_bad_pagination(transport, payload, match):
     transport.get.return_value = response(payload)
     with pytest.raises(ExtractionError, match=match):
@@ -73,7 +81,9 @@ def test_malformed_data_and_bad_pagination(transport, payload, match):
 
 
 def test_auth_scope(transport):
-    configured = Settings(_env_file=None, etl_bearer_token="secret", etl_auth_origin="https://example.test")
+    configured = Settings(
+        _env_file=None, etl_bearer_token="secret", etl_auth_origin="https://example.test"
+    )
     transport.get.return_value = response({"results": []})
     fetch_records("https://example.test/items", settings=configured)
     assert transport.get.call_args.kwargs["headers"]["Authorization"] == "Bearer secret"

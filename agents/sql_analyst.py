@@ -31,9 +31,10 @@ def clean_sql_query(query: str) -> str:
         query = query.strip()
     return query
 
+
 # AI Agent Code
 # SQL Analyst Agent Functions
-def curate_question(state:AgentSchema) -> AgentSchema:
+def curate_question(state: AgentSchema) -> AgentSchema:
     """
     Curates a question based on the current state of the agent.
 
@@ -65,8 +66,9 @@ def curate_question(state:AgentSchema) -> AgentSchema:
 
     return state
 
+
 # Prompt query context curation function
-def curate_prompt_query_context(state:AgentSchema) -> AgentSchema:
+def curate_prompt_query_context(state: AgentSchema) -> AgentSchema:
     """
     Curates a detailed prompt query context based on the current state of the agent.
 
@@ -85,7 +87,8 @@ def curate_prompt_query_context(state:AgentSchema) -> AgentSchema:
         try:
             await db_obj.connect()
             schema_info = await db_obj.schema_details(
-                get_config().database_schema, include_samples=False,
+                get_config().database_schema,
+                include_samples=False,
                 categorical_columns=get_config().sql_categorical_columns,
                 categorical_value_limit=get_config().sql_categorical_value_limit,
             )
@@ -98,7 +101,9 @@ def curate_prompt_query_context(state:AgentSchema) -> AgentSchema:
         if not schema_info or schema_info.startswith("Error"):
             raise RuntimeError("Schema unavailable")
     except (RuntimeError, OSError, ValueError, asyncpg.PostgresError):
-        state.workflow_error = "Database schema could not be loaded. Check the database configuration and connection."
+        state.workflow_error = (
+            "Database schema could not be loaded. Check the database configuration and connection."
+        )
         return state
 
     state.schema_context = schema_info
@@ -128,6 +133,7 @@ def curate_prompt_query_context(state:AgentSchema) -> AgentSchema:
     state.prompt_query_context = prompt
 
     return state
+
 
 # SQL Query Generation Function
 def validate_question(state: AgentSchema) -> AgentSchema:
@@ -167,7 +173,9 @@ def validate_question(state: AgentSchema) -> AgentSchema:
         if isinstance(review, QuestionReview):
             review = review.model_dump()
         elif not isinstance(review, dict):
-            raise TypeError("Question review response was not a dictionary or QuestionReview instance.")
+            raise TypeError(
+                "Question review response was not a dictionary or QuestionReview instance."
+            )
         review = QuestionReview.model_validate(review)
         if not review.message.strip():
             raise ValueError("Empty question feedback")
@@ -175,7 +183,9 @@ def validate_question(state: AgentSchema) -> AgentSchema:
         state.question_feedback = review.message.strip()
     except (AttributeError, TypeError, ValueError, RuntimeError, ValidationError):
         state.question_status = "error"
-        state.workflow_error = "The question could not be validated. No SQL was generated; please try again."
+        state.workflow_error = (
+            "The question could not be validated. No SQL was generated; please try again."
+        )
     return state
 
 
@@ -187,11 +197,7 @@ def question_review_edge(state: AgentSchema) -> str:
 
 def finish_question_review(state: AgentSchema) -> AgentSchema:
     state.final_answer = state.question_feedback
-    state.status = (
-        "needs_clarification"
-        if state.question_status == "ambiguous"
-        else "rejected"
-    )
+    state.status = "needs_clarification" if state.question_status == "ambiguous" else "rejected"
     state.messages = state.messages + [AIMessage(content=state.final_answer)]
     return state
 
@@ -219,6 +225,7 @@ def generate_sql_query(state: AgentSchema) -> AgentSchema:
 
     return state
 
+
 # SQL Safety Evaluation Function
 def is_safe_sql(state: AgentSchema) -> AgentSchema:
     """
@@ -238,7 +245,6 @@ def is_safe_sql(state: AgentSchema) -> AgentSchema:
         state.is_safe = "No"
         state.comments = safety_result.reason
         return state
-
 
     prompt = f"""
     You are an SQL Judge for data security and relevance. Your task is to determine two things:
@@ -264,10 +270,11 @@ def is_safe_sql(state: AgentSchema) -> AgentSchema:
         state.is_safe = "No"
         state.comments = "The relevance review failed; the query was not executed."
         return state
-    state.is_safe = response['answer']
-    state.comments = response['comments']
+    state.is_safe = response["answer"]
+    state.comments = response["comments"]
 
     return state
+
 
 # SQL Query Cancellation Function
 def cancel_sql_query(state: AgentSchema) -> AgentSchema:
@@ -288,6 +295,7 @@ def cancel_sql_query(state: AgentSchema) -> AgentSchema:
     state.messages = state.messages + [AIMessage(content=state.final_answer)]
 
     return state
+
 
 def execute_sql_query(state: AgentSchema) -> AgentSchema:
     """
@@ -311,8 +319,7 @@ def execute_sql_query(state: AgentSchema) -> AgentSchema:
         state.is_safe = "No"
         state.comments = safety_result.reason
         state.sql_query_execution_result = (
-            f"Error: Query blocked by deterministic safety validation. "
-            f"{safety_result.reason}"
+            f"Error: Query blocked by deterministic safety validation. {safety_result.reason}"
         )
         state.workflow_error = state.sql_query_execution_result
         return state
@@ -322,7 +329,8 @@ def execute_sql_query(state: AgentSchema) -> AgentSchema:
         try:
             await db_obj.connect()
             result = await db_obj.execute_read_only_sql(
-                sql_query, timeout=get_config().sql_timeout_seconds,
+                sql_query,
+                timeout=get_config().sql_timeout_seconds,
             )
             return result
         finally:
@@ -331,13 +339,18 @@ def execute_sql_query(state: AgentSchema) -> AgentSchema:
     try:
         execution_result = asyncio.run(_execute_query())
         if execution_result is None:
-            state.workflow_error = "The database query failed. No answer was generated from its results."
+            state.workflow_error = (
+                "The database query failed. No answer was generated from its results."
+            )
         else:
             state.sql_query_execution_result = execution_result
     except (asyncpg.PostgresError, OSError, RuntimeError, ValueError):
-        state.workflow_error = "The database query failed. Check the database configuration and connection."
+        state.workflow_error = (
+            "The database query failed. Check the database configuration and connection."
+        )
 
     return state
+
 
 # Final Answer Representation Function
 def representation_final_answer(state: AgentSchema) -> AgentSchema:
@@ -378,16 +391,20 @@ def representation_final_answer(state: AgentSchema) -> AgentSchema:
 
     state.final_answer = llm_response
     state.status = "success"
-    state.messages = state.messages + [AIMessage(content=f"{llm_response}")]  # Append the final answer to the messages list
+    state.messages = state.messages + [
+        AIMessage(content=f"{llm_response}")
+    ]  # Append the final answer to the messages list
 
     return state
+
 
 def _response_text(response) -> str:
     content = response.content
     if isinstance(content, str):
         return content
     return "".join(
-        block.get("text", "") for block in content
+        block.get("text", "")
+        for block in content
         if isinstance(block, dict) and block.get("type") == "text"
     )
 
@@ -402,6 +419,7 @@ def finish_error(state: AgentSchema) -> AgentSchema:
 def _next_or_error(next_node):
     def route(state: AgentSchema):
         return "finish_error" if state.workflow_error else next_node
+
     return route
 
 
@@ -436,15 +454,22 @@ for source, target in [
     ("execute_sql_query", "representation_final_answer"),
 ]:
     sql_agent_graph.add_conditional_edges(
-        source, _next_or_error(target), {target: target, "finish_error": "finish_error"},
+        source,
+        _next_or_error(target),
+        {target: target, "finish_error": "finish_error"},
     )
 sql_agent_graph.add_edge("finish_error", END)
-sql_agent_graph.add_conditional_edges("validate_question", question_review_edge, {
-    "generate_sql_query": "generate_sql_query",
-    "finish_question_review": "finish_question_review",
-    "finish_error": "finish_error",
-})
+sql_agent_graph.add_conditional_edges(
+    "validate_question",
+    question_review_edge,
+    {
+        "generate_sql_query": "generate_sql_query",
+        "finish_question_review": "finish_question_review",
+        "finish_error": "finish_error",
+    },
+)
 sql_agent_graph.add_edge("finish_question_review", END)
+
 
 # Conditional Edge Function
 def is_safe_sql_edge(state: AgentSchema) -> str:
@@ -455,11 +480,12 @@ def is_safe_sql_edge(state: AgentSchema) -> str:
     else:
         return "cancel_sql_query"
 
-sql_agent_graph.add_conditional_edges("is_safe_sql", is_safe_sql_edge,
-                                      {
-                                          "execute_sql_query": "execute_sql_query",
-                                          "cancel_sql_query": "cancel_sql_query"
-                                      })    
+
+sql_agent_graph.add_conditional_edges(
+    "is_safe_sql",
+    is_safe_sql_edge,
+    {"execute_sql_query": "execute_sql_query", "cancel_sql_query": "cancel_sql_query"},
+)
 
 sql_agent_graph.add_edge("cancel_sql_query", END)
 sql_agent_graph.add_edge("representation_final_answer", END)
@@ -468,7 +494,6 @@ sql_agent_graph.add_edge("representation_final_answer", END)
 sql_analyst = sql_agent_graph.compile()
 
 if __name__ == "__main__":
-
     # Generate and display the graph
     graph_png = sql_analyst.get_graph().draw_mermaid_png()
 
@@ -479,12 +504,14 @@ if __name__ == "__main__":
     # Try to display in Jupyter/IPython
     try:
         from IPython.display import Image, display
+
         display(Image(graph_png))
     except ImportError:
         # If not in Jupyter, try to open with default image viewer
         try:
             import webbrowser
             from pathlib import Path
+
             webbrowser.open(f"file://{Path('sql_analyst_graph.png').absolute()}")
         except (OSError, webbrowser.Error):
             print("Graph image saved. Open 'sql_analyst_graph.png' to view the workflow.")
@@ -498,27 +525,29 @@ if __name__ == "__main__":
         "is_safe": "No",
         "comments": "",
         "sql_query_execution_result": "",
-        "final_answer": ""
+        "final_answer": "",
     }
 
     # Execute the Graph
     sql_analyst_response = sql_analyst.invoke(input_schema)
     print("final output ********************************")
 
-    print(sql_analyst_response['messages'])  # Print the final output of the graph execution
+    print(sql_analyst_response["messages"])  # Print the final output of the graph execution
     print("generated_sql_query ********************************")
 
-    print(sql_analyst_response['generated_sql_query'])  # Print the generated SQL query
+    print(sql_analyst_response["generated_sql_query"])  # Print the generated SQL query
 
     print(" result of SQL query execution ********************************")
 
     """if is not relevant, the SQL query might not return the expected results, but can we ask the user to clarify or rephrase their question?"""
-    if sql_analyst_response['is_safe'] == "No":
+    if sql_analyst_response["is_safe"] == "No":
         print("The SQL query is either unsafe or not relevant to the user's question.")
     else:
         print("The SQL query is safe and relevant to the user's question.")
-        print(sql_analyst_response['sql_query_execution_result'])  # Print the result of executing the SQL query
+        print(
+            sql_analyst_response["sql_query_execution_result"]
+        )  # Print the result of executing the SQL query
 
-    #print("prompt_query_context ********************************")
+    # print("prompt_query_context ********************************")
 
-    #print(sql_analyst_response['prompt_query_context'])  # Print the prompt query context
+    # print(sql_analyst_response['prompt_query_context'])  # Print the prompt query context

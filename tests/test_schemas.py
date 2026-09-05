@@ -10,11 +10,14 @@ def test_data_schema_defaults_to_no_route():
     assert state.route_response == ""
 
 
-@pytest.mark.parametrize("schema,values", [
-    (DataSchema, {"messages": []}),
-    (ETLSchema, {"messages": []}),
-    (AgentSchema, {"messages": [], "user_question": "question"}),
-])
+@pytest.mark.parametrize(
+    "schema,values",
+    [
+        (DataSchema, {"messages": []}),
+        (ETLSchema, {"messages": []}),
+        (AgentSchema, {"messages": [], "user_question": "question"}),
+    ],
+)
 def test_workflows_share_a_standard_output_contract(schema, values):
     state = schema(**values)
 

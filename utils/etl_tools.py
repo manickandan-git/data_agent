@@ -1,4 +1,5 @@
 """ETL (Extract, Transform, Load) utility functions module."""
+
 from pathlib import Path
 
 import pandas as pd
@@ -35,20 +36,22 @@ class ETLTools:
             raise ValueError(f"Path does not exist: {candidate}") from error
 
         if not resolved.is_relative_to(allowed_root):
-            raise ValueError(
-                f"Path is outside the allowed directory '{allowed_root}': {resolved}"
-            )
+            raise ValueError(f"Path is outside the allowed directory '{allowed_root}': {resolved}")
         return resolved
 
     @staticmethod
     def _ensure_new_output(output_file: Path) -> None:
         if output_file.exists():
-            raise FileExistsError(
-                f"Refusing to overwrite existing output file: {output_file}"
-            )
+            raise FileExistsError(f"Refusing to overwrite existing output file: {output_file}")
 
-    def extract_load(self, url:str, output_folder:str, format:str,
-                     records_path: str = "results", next_path: str = "next") -> str:
+    def extract_load(
+        self,
+        url: str,
+        output_folder: str,
+        format: str,
+        records_path: str = "results",
+        next_path: str = "next",
+    ) -> str:
         """
         Extract data from the API (url) and load it into the target location output_folder.
 
@@ -89,7 +92,8 @@ class ETLTools:
             return f"Extraction failed: {error}"
 
     """Transform and load context utility function."""
-    def transform_load_context(self, file_path:str):
+
+    def transform_load_context(self, file_path: str):
         """
         This tool transforms the data from the specified file and loads it into the
         desired location (output_folder).
@@ -253,6 +257,6 @@ class ETLTools:
 
 if __name__ == "__main__":
     etl_tool = ETLTools()  # Assuming the class name is ETLTools
-    print(etl_tool.extract_load("https://pokeapi.co/api/v2/pokemon","data/extract","csv"))
-    #path="C:\\Users\\manic\\source\\repos\\AI\\Data Professional\\data_agent\\data\\extract\\extracted_data.csv"
-    #print(etl_tool.transform_load_context(path))
+    print(etl_tool.extract_load("https://pokeapi.co/api/v2/pokemon", "data/extract", "csv"))
+    # path="C:\\Users\\manic\\source\\repos\\AI\\Data Professional\\data_agent\\data\\extract\\extracted_data.csv"
+    # print(etl_tool.transform_load_context(path))

@@ -10,3 +10,6 @@ wheels/
 .venv
 .env
 .pytest-tmp/
+.coverage
+coverage.xml
+htmlcov/

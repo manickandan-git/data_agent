@@ -15,20 +15,26 @@ NAMING_CONVENTION = {
 # Fix applied here: Add schema="public" to metadata globally
 metadata = MetaData(naming_convention=NAMING_CONVENTION, schema="public")
 
+
 class Base(DeclarativeBase):
     """Shared abstract base class implementing the global metadata configuration."""
+
     metadata = metadata
+
 
 class UUIDPrimaryKeyMixin:
     """Provide a UUID primary key."""
+
     id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         primary_key=True,
         default=uuid4,
     )
 
+
 class TimestampMixin:
     """Track when a database record was created and last updated."""
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -41,8 +47,10 @@ class TimestampMixin:
         onupdate=func.now(),
     )
 
+
 class VersionedMixin:
     """Enable SQLAlchemy optimistic concurrency checking."""
+
     version: Mapped[int] = mapped_column(
         nullable=False,
         default=1,
@@ -55,6 +63,6 @@ class VersionedMixin:
             "version_id_col": cls.version,
         }
 
+
 class UUIDTimestampVersionMixin(UUIDPrimaryKeyMixin, TimestampMixin, VersionedMixin):
     """Combine the UUID primary key, timestamp, and version mixins."""
-    

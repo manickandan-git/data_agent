@@ -24,7 +24,7 @@ class Rating(Base):
         CheckConstraint("rating BETWEEN 1 AND 5", name="chk_rating"),
         Index("idx_ratings_ride_id", "ride_id"),
         Index("idx_ratings_driver_id", "driver_id"),
-        {"schema": "public"}
+        {"schema": "public"},
     )
 
     rating_id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -38,7 +38,9 @@ class Rating(Base):
     # Relationships
     ride: Mapped["Ride"] = relationship(back_populates="ratings")
     rider: Mapped["User"] = relationship(foreign_keys=[rider_id], back_populates="ratings_given")
-    driver: Mapped["User"] = relationship(foreign_keys=[driver_id], back_populates="ratings_received")
+    driver: Mapped["User"] = relationship(
+        foreign_keys=[driver_id], back_populates="ratings_received"
+    )
 
     def __repr__(self) -> str:
         return f"<Rating rating_id={self.rating_id} score={self.rating}>"

@@ -36,10 +36,7 @@ def test_observed_node_assigns_correlation_id_and_logs_completion(capsys):
 
     result = observed_node("data", "test_node", lambda value: value)(state)
 
-    events = [
-        json.loads(line)
-        for line in capsys.readouterr().err.splitlines()
-    ]
+    events = [json.loads(line) for line in capsys.readouterr().err.splitlines()]
     assert result.run_id
     assert [event["event"] for event in events] == [
         "workflow.node.started",

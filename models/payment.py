@@ -17,7 +17,7 @@ class Payment(Base):
     __table_args__ = (
         Index("idx_payments_ride_id", "ride_id"),
         Index("idx_payments_user_id", "user_id"),
-        {"schema": "public"}
+        {"schema": "public"},
     )
 
     payment_id: Mapped[int] = mapped_column(Integer, primary_key=True)

@@ -1,6 +1,5 @@
 """ETL (Extract, Transform, Load) Agent Schema module."""
 
-
 from pydantic import Field
 
 from agentschemas.workflow import WorkflowOutput

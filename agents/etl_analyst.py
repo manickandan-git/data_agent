@@ -9,8 +9,13 @@ from utils.observability import observed_node
 
 
 @tool
-def extract_load_tool(url:str, output_folder:str, format:str,
-                      records_path: str = "results", next_path: str = "next") -> str:
+def extract_load_tool(
+    url: str,
+    output_folder: str,
+    format: str,
+    records_path: str = "results",
+    next_path: str = "next",
+) -> str:
     """
     This tool extracts the data from the API (url) and loads it into the
     the desired location (output_folder).
@@ -21,7 +26,7 @@ def extract_load_tool(url:str, output_folder:str, format:str,
         format (str): The format in which to save the extracted data (csv, json, parquet).
         records_path (str): Dot-separated JSON path to records; empty for a root array.
         next_path (str): Dot-separated next-page URL path; empty to disable pagination.
-    
+
     Returns:
         str: A message indicating the success or failure of the operation.
 
@@ -34,7 +39,9 @@ def extract_load_tool(url:str, output_folder:str, format:str,
 
 
 @tool
-def transform_load_tool(input_file_path:str,output_folder:str,output_format:str, user_question:str) -> str:
+def transform_load_tool(
+    input_file_path: str, output_folder: str, output_format: str, user_question: str
+) -> str:
     """
     This tool transforms the data from the specified file and loads it into the
     desired location (output_folder).
@@ -43,7 +50,7 @@ def transform_load_tool(input_file_path:str,output_folder:str,output_format:str,
         input_file_path (str): The path to the file containing the data to be transformed.
         output_folder (str): The folder where the transformed data will be saved.
         output_format (str): The format in which to save the transformed data (csv, json, parquet).
-    
+
     Returns:
         str: A message indicating the success or failure of the operation.
 
@@ -84,14 +91,14 @@ def transform_load_tool(input_file_path:str,output_folder:str,output_format:str,
     return f"{result}\nTransformation plan: {plan.model_dump_json()}"
 
 
-# Toolkit 
+# Toolkit
 tools = [extract_load_tool, transform_load_tool]
-
 
 
 # ---------------------------------------- AGENT GRAPH ---------------------------------------- #
 
-def llm_node(state:ETLSchema):
+
+def llm_node(state: ETLSchema):
 
     messages = state.messages
 
@@ -107,7 +114,9 @@ def llm_node(state:ETLSchema):
         final_answer = pick_llm("medium").bind_tools(tools).invoke(prompt)
     except (RuntimeError, TypeError, ValueError):
         state.status = "error"
-        state.workflow_error = "The ETL request could not be processed. Check the model configuration."
+        state.workflow_error = (
+            "The ETL request could not be processed. Check the model configuration."
+        )
         state.final_answer = state.workflow_error
         return state
 
@@ -124,12 +133,13 @@ def _response_text(response) -> str:
     if isinstance(content, str):
         return content
     return "".join(
-        block.get("text", "") for block in content
+        block.get("text", "")
+        for block in content
         if isinstance(block, dict) and block.get("type") == "text"
     )
 
 
-def tool_node(state:ETLSchema):
+def tool_node(state: ETLSchema):
     """
     This node is responsible for invoking the appropriate tool based on the user's question and the context provided by the LLM.
     """
@@ -141,11 +151,10 @@ def tool_node(state:ETLSchema):
     tool_calls = state.messages[-1].tool_calls
 
     for tool_call in tool_calls:
+        tool = tools_by_name[tool_call["name"]]
+        observation = tool.invoke(tool_call["args"])
 
-        tool = tools_by_name[tool_call['name']]
-        observation = tool.invoke(tool_call['args'])
-
-        tools_results.append(ToolMessage(content=observation, tool_call_id = tool_call['id']))
+        tools_results.append(ToolMessage(content=observation, tool_call_id=tool_call["id"]))
         if observation.startswith(
             ("Extraction failed:", "Transformation failed:", "Unsupported format:")
         ):
@@ -155,7 +164,7 @@ def tool_node(state:ETLSchema):
 
     state.messages = state.messages + tools_results
 
-    return state   
+    return state
 
 
 # Nodes & Edges
@@ -165,7 +174,8 @@ etl_analyst_graph.add_node("tool_node", observed_node("etl", "tool_node", tool_n
 
 etl_analyst_graph.add_edge(START, "llm_node")
 
-def is_tool_call(state:ETLSchema):
+
+def is_tool_call(state: ETLSchema):
     tool_calls = state.messages[-1].tool_calls
 
     if tool_calls:
@@ -173,13 +183,11 @@ def is_tool_call(state:ETLSchema):
     else:
         return "end"
 
+
 etl_analyst_graph.add_conditional_edges(
-    "llm_node",is_tool_call,
-    {
-        "tool_node": "tool_node",
-        "end": END
-    }
+    "llm_node", is_tool_call, {"tool_node": "tool_node", "end": END}
 )
+
 
 def tool_result_edge(state: ETLSchema) -> str:
     return "end" if state.status == "error" else "llm_node"
@@ -198,20 +206,27 @@ if __name__ == "__main__":
 
     # Optional
     from IPython.display import Image
+
     img = Image(etl_analyst.get_graph().draw_mermaid_png())
     with open("etl_analyst_graph.png", "wb") as f:
         f.write(img.data)
 
-    #response = etl_analyst.invoke(
-     #   {"messages":[HumanMessage(content="I want to extract the data from the API endpoint 'https://pokeapi.co/api/v2/pokemon' and save it to data/extract folder in the csv folder")]}
-    #)
+    # response = etl_analyst.invoke(
+    #   {"messages":[HumanMessage(content="I want to extract the data from the API endpoint 'https://pokeapi.co/api/v2/pokemon' and save it to data/extract folder in the csv folder")]}
+    # )
 
     response = etl_analyst.invoke(
-          {"messages":[HumanMessage(content="""
+        {
+            "messages": [
+                HumanMessage(
+                    content="""
              I want to transform the data stored in the 'C:\\Users\\manic\\source\\repos\\AI\\Data Professional\\data_agent\\data\\extract\\extracted_data.csv' file 
              and save the transformed data in the 'C:\\Users\\manic\\source\\repos\\AI\\Data Professional\\data_agent\\data\\transform' folder in the csv format.
              The transformation should filter the data to show bulbasaur and ivysaur pokemon only.
-    """)]}
-     )    
+    """
+                )
+            ]
+        }
+    )
 
     print(response)
