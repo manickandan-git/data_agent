@@ -3,8 +3,8 @@ import logging
 
 import pytest
 
-from agentschemas import DataSchema
-from utils.observability import (
+from data_agent.agentschemas import DataSchema
+from data_agent.utils.observability import (
     configure_observability,
     log_event,
     observed_node,

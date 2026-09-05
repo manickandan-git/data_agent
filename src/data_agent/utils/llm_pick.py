@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
-from config import Settings, get_config
+from data_agent.config import Settings, get_config
 
 
 @dataclass(frozen=True)

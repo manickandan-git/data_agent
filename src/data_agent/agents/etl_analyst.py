@@ -2,10 +2,10 @@ from langchain.tools import tool
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 
-from agentschemas import ETLSchema, TransformationPlan
-from utils.etl_tools import ETLTools
-from utils.llm_pick import pick_llm, structured_llm
-from utils.observability import observed_node
+from data_agent.agentschemas import ETLSchema, TransformationPlan
+from data_agent.utils.etl_tools import ETLTools
+from data_agent.utils.llm_pick import pick_llm, structured_llm
+from data_agent.utils.observability import observed_node
 
 
 @tool

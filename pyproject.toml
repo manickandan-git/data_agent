@@ -35,16 +35,12 @@ dependencies = [
 ]
 
 [project.scripts]
-data-agent = "main:run"
-data-agent-api = "api:run"
-
-[tool.setuptools]
-include-package-data = true
-py-modules = ["api", "config", "main"]
+data-agent = "data_agent.cli:run"
+data-agent-api = "data_agent.api:run"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["agents*", "agentschemas*", "models*", "schemas*", "utils*"]
+where = ["src"]
+include = ["data_agent*"]
 exclude = ["tests*"]
 
 [dependency-groups]
@@ -56,7 +52,7 @@ dev = [
 
 [tool.pytest.ini_options]
 addopts = "-ra --basetemp=.pytest-tmp"
-pythonpath = ["."]
+pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.ruff]
@@ -69,7 +65,7 @@ select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.coverage.run]
 branch = true
-source = ["agents", "agentschemas", "utils", "api", "config"]
+source = ["data_agent"]
 
 [tool.coverage.report]
 fail_under = 85

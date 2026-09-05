@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from agentschemas.transformation import FilterRule, TransformationPlan
-from utils.api_extractor import ExtractionError, fetch_records
+from data_agent.agentschemas.transformation import FilterRule, TransformationPlan
+from data_agent.utils.api_extractor import ExtractionError, fetch_records
 
 
 class ETLTools:
@@ -13,7 +13,10 @@ class ETLTools:
 
     def __init__(self, data_root: str | Path | None = None):
         """Initialize ETL tools with an explicit filesystem boundary."""
-        project_root = Path(__file__).resolve().parents[1]
+        source_root = Path(__file__).resolve().parents[3]
+        project_root = (
+            source_root if (source_root / "pyproject.toml").is_file() else Path.cwd().resolve()
+        )
         self.project_root = project_root
         self.data_root = Path(data_root or project_root / "data").resolve()
         self.extract_root = (self.data_root / "extract").resolve()

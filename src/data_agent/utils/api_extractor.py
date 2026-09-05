@@ -5,7 +5,7 @@ from urllib.parse import urljoin, urlsplit
 
 import requests
 
-from config import get_config
+from data_agent.config import get_config
 
 
 class ExtractionError(ValueError):

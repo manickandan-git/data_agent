@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from agentschemas import AgentSchema, DataSchema, ETLSchema, JudgeSchema, RouterSchema
+from data_agent.agentschemas import AgentSchema, DataSchema, ETLSchema, JudgeSchema, RouterSchema
 
 
 def test_data_schema_defaults_to_no_route():

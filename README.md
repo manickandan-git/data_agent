@@ -100,7 +100,8 @@ LLM_MODEL_HIGH=your-high-model
 
 Models must support tool calling and structured output. Other providers can
 register a `ProviderAdapter` through `register_provider()` in
-`utils/llm_pick.py`; the workflows do not require provider-specific edits.
+`src/data_agent/utils/llm_pick.py`; workflows do not require
+provider-specific edits.
 
 Request controls include `LLM_TEMPERATURE`, `LLM_TIMEOUT_SECONDS`,
 `LLM_MAX_RETRIES`, `LLM_MAX_TOKENS`, and `OPENAI_REASONING_EFFORT`.
@@ -213,7 +214,7 @@ data-agent-api
 ```
 
 The equivalent source-checkout command is
-`uvicorn api:app --host 127.0.0.1 --port 8000`.
+`uvicorn data_agent.api:app --host 127.0.0.1 --port 8000`.
 
 Interactive OpenAPI documentation is available at
 `http://127.0.0.1:8000/docs`. Check liveness with:
@@ -264,13 +265,13 @@ data-agent "What payment methods are available in the database?"
 
 The command prints the public final answer and exits with code 1 when the
 workflow returns `error`. The equivalent source-checkout command is
-`python main.py "your question"`.
+`python -m data_agent.cli "your question"`.
 
 Or invoke the router directly:
 
 ```python
 from langchain_core.messages import HumanMessage
-from agents.data_analyst import data_analyst
+from data_agent.agents.data_analyst import data_analyst
 
 result = data_analyst.invoke(
     {"messages": [HumanMessage(content="What payment methods are available in the database?")]}
@@ -354,22 +355,24 @@ vehicles. Alembic creates the tables and loads the supplied CSV seed data.
 
 ```text
 data_agent/
-├── api.py                  # Versioned FastAPI HTTP interface
-├── agents/                 # Router, SQL, and ETL graphs
-├── agentschemas/           # Workflow state and structured LLM schemas
 ├── data/
 │   ├── extract/            # API extraction output
 │   └── transform/          # Transformation output
 ├── migrations/             # Alembic environment and revisions
-├── models/                 # SQLAlchemy ORM models
-├── schemas/                # Pydantic domain schemas
+├── src/
+│   └── data_agent/
+│       ├── agents/         # Router, SQL, and ETL graphs
+│       ├── agentschemas/   # Workflow state and structured LLM schemas
+│       ├── models/         # SQLAlchemy ORM models
+│       ├── schemas/        # Pydantic domain schemas
+│       ├── utils/          # Database, safety, LLM, and ETL utilities
+│       ├── api.py          # Versioned FastAPI interface
+│       ├── cli.py          # One-shot command-line interface
+│       └── config.py       # Validated settings
 ├── tests/                  # Automated offline tests
-├── utils/                  # Database, safety, LLM, and ETL utilities
 ├── .env.example            # Configuration template
 ├── MANIFEST.in             # Source-distribution asset manifest
 ├── alembic.ini             # Alembic configuration
-├── config.py               # Validated application settings
-├── main.py                 # Example entry point
 ├── pyproject.toml          # Project and test configuration
 ├── requirements.txt        # Pinned pip dependencies
 └── uv.lock                 # Reproducible uv lock
@@ -421,9 +424,9 @@ repository permissions and a 15-minute timeout.
 Run an agent module to regenerate its Mermaid PNG:
 
 ```powershell
-python -m agents.data_analyst
-python -m agents.sql_analyst
-python -m agents.etl_analyst
+python -m data_agent.agents.data_analyst
+python -m data_agent.agents.sql_analyst
+python -m data_agent.agents.etl_analyst
 ```
 
 Outputs are `data_agent_graph.png`, `sql_analyst_graph.png`, and

@@ -2,9 +2,9 @@ import importlib
 
 import pytest
 
-from agents.sql_analyst import clean_sql_query, is_safe_sql, is_safe_sql_edge
-from agentschemas import AgentSchema
-from utils.sql_safety import validate_read_only_sql
+from data_agent.agents.sql_analyst import clean_sql_query, is_safe_sql, is_safe_sql_edge
+from data_agent.agentschemas import AgentSchema
+from data_agent.utils.sql_safety import validate_read_only_sql
 
 
 @pytest.mark.parametrize(
@@ -74,7 +74,7 @@ def test_unsafe_query_is_rejected_before_llm_judge(monkeypatch):
     def fail_if_called(_level):
         raise AssertionError("LLM judge must not run for mechanically unsafe SQL")
 
-    sql_analyst_module = importlib.import_module("agents.sql_analyst")
+    sql_analyst_module = importlib.import_module("data_agent.agents.sql_analyst")
     monkeypatch.setattr(sql_analyst_module, "pick_llm", fail_if_called)
     state = AgentSchema(
         messages=[],

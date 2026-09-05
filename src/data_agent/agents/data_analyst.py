@@ -1,11 +1,11 @@
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 
-from agents.etl_analyst import etl_analyst
-from agents.sql_analyst import sql_analyst
-from agentschemas import DataSchema, RouterSchema
-from utils.llm_pick import structured_llm
-from utils.observability import observed_node
+from data_agent.agents.etl_analyst import etl_analyst
+from data_agent.agents.sql_analyst import sql_analyst
+from data_agent.agentschemas import DataSchema, RouterSchema
+from data_agent.utils.llm_pick import structured_llm
+from data_agent.utils.observability import observed_node
 
 # ---------------------------- DATA AGENT GRAPH ---------------------------- #
 

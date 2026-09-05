@@ -9,9 +9,9 @@ from fastapi.responses import JSONResponse
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, ConfigDict, Field
 
-from agentschemas.workflow import WorkflowStatus
-from config import get_config
-from utils.observability import configure_observability
+from data_agent.agentschemas.workflow import WorkflowStatus
+from data_agent.config import get_config
+from data_agent.utils.observability import configure_observability
 
 
 class QueryRequest(BaseModel):
@@ -33,7 +33,7 @@ class HealthResponse(BaseModel):
 
 
 def _default_workflow():
-    from agents.data_analyst import data_analyst
+    from data_agent.agents.data_analyst import data_analyst
 
     return data_analyst
 
@@ -133,4 +133,4 @@ def run() -> None:
     """Run the local API server through the installed console command."""
     import uvicorn
 
-    uvicorn.run("api:app", host="127.0.0.1", port=8000)
+    uvicorn.run("data_agent.api:app", host="127.0.0.1", port=8000)

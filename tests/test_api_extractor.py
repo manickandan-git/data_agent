@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 import pytest
 import requests
 
-from config import Settings
-from utils.api_extractor import ExtractionError, fetch_records
+from data_agent.config import Settings
+from data_agent.utils.api_extractor import ExtractionError, fetch_records
 
 
 def response(payload, status=200):
@@ -19,8 +19,8 @@ def response(payload, status=200):
 def transport(monkeypatch):
     session = MagicMock()
     session.__enter__.return_value = session
-    monkeypatch.setattr("utils.api_extractor.requests.Session", lambda: session)
-    monkeypatch.setattr("utils.api_extractor.time.sleep", lambda _: None)
+    monkeypatch.setattr("data_agent.utils.api_extractor.requests.Session", lambda: session)
+    monkeypatch.setattr("data_agent.utils.api_extractor.time.sleep", lambda _: None)
     return session
 
 

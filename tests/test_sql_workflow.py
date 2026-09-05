@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from langchain_core.messages import AIMessage
 
-from agentschemas import AgentSchema, JudgeSchema
-from agentschemas.question import QuestionReview
+from data_agent.agentschemas import AgentSchema, JudgeSchema
+from data_agent.agentschemas.question import QuestionReview
 
 
 @pytest.fixture
 def workflow(monkeypatch):
-    module = importlib.import_module("agents.sql_analyst")
+    module = importlib.import_module("data_agent.agents.sql_analyst")
     settings = SimpleNamespace(
         require_database_url=lambda: "test-dsn",
         database_schema="public",

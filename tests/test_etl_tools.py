@@ -4,8 +4,8 @@ import pandas as pd
 import pytest
 import requests
 
-from agentschemas import FilterRule, SortRule, TransformationPlan
-from utils.etl_tools import ETLTools
+from data_agent.agentschemas import FilterRule, SortRule, TransformationPlan
+from data_agent.utils.etl_tools import ETLTools
 
 
 class FakeResponse:
@@ -24,7 +24,9 @@ class FakeResponse:
 def test_extract_load_writes_api_results_to_csv(monkeypatch, tmp_path):
     extract_folder = tmp_path / "extract"
     response = FakeResponse({"results": [{"name": "bulbasaur", "id": 1}]})
-    monkeypatch.setattr("utils.etl_tools.fetch_records", lambda *_: response.payload["results"])
+    monkeypatch.setattr(
+        "data_agent.utils.etl_tools.fetch_records", lambda *_: response.payload["results"]
+    )
 
     result = ETLTools(data_root=tmp_path).extract_load(
         "https://example.test/pokemon",
@@ -39,12 +41,12 @@ def test_extract_load_writes_api_results_to_csv(monkeypatch, tmp_path):
 
 
 def test_extract_load_reports_request_failure(monkeypatch, tmp_path):
-    from utils.api_extractor import ExtractionError
+    from data_agent.utils.api_extractor import ExtractionError
 
     def fail(*_):
         raise ExtractionError("API request failed.")
 
-    monkeypatch.setattr("utils.etl_tools.fetch_records", fail)
+    monkeypatch.setattr("data_agent.utils.etl_tools.fetch_records", fail)
 
     result = ETLTools(data_root=tmp_path).extract_load(
         "https://example.test/pokemon",

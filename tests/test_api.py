@@ -2,8 +2,8 @@ from unittest.mock import Mock
 
 from fastapi.testclient import TestClient
 
-from api import create_app
-from config import Settings
+from data_agent.api import create_app
+from data_agent.config import Settings
 
 
 def test_health_endpoint():

@@ -4,11 +4,11 @@ from unittest.mock import Mock
 
 from langchain_core.messages import AIMessage
 
-from agentschemas import ETLSchema
+from data_agent.agentschemas import ETLSchema
 
 
 def test_llm_node_sets_standard_success_output(monkeypatch):
-    module = importlib.import_module("agents.etl_analyst")
+    module = importlib.import_module("data_agent.agents.etl_analyst")
     bound = Mock()
     bound.invoke.return_value = AIMessage(content="Extraction completed.")
     client = Mock()
@@ -23,7 +23,7 @@ def test_llm_node_sets_standard_success_output(monkeypatch):
 
 
 def test_llm_node_converts_model_failure_to_standard_error(monkeypatch):
-    module = importlib.import_module("agents.etl_analyst")
+    module = importlib.import_module("data_agent.agents.etl_analyst")
 
     def fail(_level):
         raise RuntimeError("provider details")
@@ -38,7 +38,7 @@ def test_llm_node_converts_model_failure_to_standard_error(monkeypatch):
 
 
 def test_tool_failure_sets_error_and_stops_workflow(monkeypatch):
-    module = importlib.import_module("agents.etl_analyst")
+    module = importlib.import_module("data_agent.agents.etl_analyst")
     fake_tool = SimpleNamespace(
         name="extract",
         invoke=lambda _arguments: "Extraction failed: unavailable",
@@ -57,7 +57,7 @@ def test_tool_failure_sets_error_and_stops_workflow(monkeypatch):
 
 
 def test_successful_tool_result_returns_to_model(monkeypatch):
-    module = importlib.import_module("agents.etl_analyst")
+    module = importlib.import_module("data_agent.agents.etl_analyst")
     fake_tool = SimpleNamespace(
         name="extract",
         invoke=lambda _arguments: "Data successfully extracted.",

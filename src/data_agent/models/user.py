@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, Date, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from models.base import Base
+from data_agent.models.base import Base
 
 if TYPE_CHECKING:
-    from models.payment import Payment
-    from models.rating import Rating
-    from models.ride import Ride
-    from models.vehicle import Vehicle
+    from data_agent.models.payment import Payment
+    from data_agent.models.rating import Rating
+    from data_agent.models.ride import Ride
+    from data_agent.models.vehicle import Vehicle
 
 
 class User(Base):

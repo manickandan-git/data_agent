@@ -2,8 +2,7 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-import api
-import main
+from data_agent import api, cli
 
 
 def test_cli_submits_question_and_prints_answer(monkeypatch, capsys):
@@ -12,10 +11,10 @@ def test_cli_submits_question_and_prints_answer(monkeypatch, capsys):
         "status": "success",
         "final_answer": "There are five methods.",
     }
-    monkeypatch.setattr("agents.data_analyst.data_analyst", workflow)
-    monkeypatch.setattr(main, "configure_observability", Mock())
+    monkeypatch.setattr("data_agent.agents.data_analyst.data_analyst", workflow)
+    monkeypatch.setattr(cli, "configure_observability", Mock())
     monkeypatch.setattr(
-        main,
+        cli,
         "get_config",
         lambda: SimpleNamespace(
             observability_log_level="INFO",
@@ -28,7 +27,7 @@ def test_cli_submits_question_and_prints_answer(monkeypatch, capsys):
         ["data-agent", "What payment methods are available?"],
     )
 
-    assert main.run() == 0
+    assert cli.run() == 0
     assert capsys.readouterr().out.strip() == "There are five methods."
     assert (
         workflow.invoke.call_args.args[0]["messages"][0].content
@@ -42,10 +41,10 @@ def test_cli_returns_nonzero_for_workflow_error(monkeypatch):
         "status": "error",
         "final_answer": "Request failed.",
     }
-    monkeypatch.setattr("agents.data_analyst.data_analyst", workflow)
-    monkeypatch.setattr(main, "configure_observability", Mock())
+    monkeypatch.setattr("data_agent.agents.data_analyst.data_analyst", workflow)
+    monkeypatch.setattr(cli, "configure_observability", Mock())
     monkeypatch.setattr(
-        main,
+        cli,
         "get_config",
         lambda: SimpleNamespace(
             observability_log_level="INFO",
@@ -54,7 +53,7 @@ def test_cli_returns_nonzero_for_workflow_error(monkeypatch):
     )
     monkeypatch.setattr(sys, "argv", ["data-agent", "question"])
 
-    assert main.run() == 1
+    assert cli.run() == 1
 
 
 def test_api_console_entrypoint_binds_to_localhost(monkeypatch):
@@ -64,7 +63,7 @@ def test_api_console_entrypoint_binds_to_localhost(monkeypatch):
     api.run()
 
     run_server.assert_called_once_with(
-        "api:app",
+        "data_agent.api:app",
         host="127.0.0.1",
         port=8000,
     )

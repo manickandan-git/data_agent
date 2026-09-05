@@ -3,8 +3,8 @@ from unittest.mock import Mock
 import pytest
 from pydantic import ValidationError
 
-from config import Settings
-from utils.llm_pick import (
+from data_agent.config import Settings
+from data_agent.utils.llm_pick import (
     PROVIDERS,
     LLMFactory,
     ProviderAdapter,

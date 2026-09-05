@@ -2,7 +2,7 @@
 
 from pydantic import Field
 
-from agentschemas.workflow import WorkflowOutput
+from data_agent.agentschemas.workflow import WorkflowOutput
 
 
 class ETLSchema(WorkflowOutput):

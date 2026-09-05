@@ -4,8 +4,8 @@ import argparse
 
 from langchain_core.messages import HumanMessage
 
-from config import get_config
-from utils.observability import configure_observability
+from data_agent.config import get_config
+from data_agent.utils.observability import configure_observability
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,7 +26,7 @@ def run() -> int:
         json_logs=settings.observability_json_logs,
     )
 
-    from agents.data_analyst import data_analyst
+    from data_agent.agents.data_analyst import data_analyst
 
     result = data_analyst.invoke({"messages": [HumanMessage(content=args.question)]})
     print(result["final_answer"])

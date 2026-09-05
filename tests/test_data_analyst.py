@@ -1,9 +1,9 @@
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-import agents.data_analyst as module
-from agents.data_analyst import route_edge
-from agentschemas import DataSchema, RouterSchema
+import data_agent.agents.data_analyst as module
+from data_agent.agents.data_analyst import route_edge
+from data_agent.agentschemas import DataSchema, RouterSchema
 
 
 @pytest.mark.parametrize(

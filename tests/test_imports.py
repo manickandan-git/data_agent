@@ -10,15 +10,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 def test_agents_package_does_not_eagerly_import_workflows():
     script = (
-        "import sys; import agents; "
-        "assert 'agents.data_analyst' not in sys.modules; "
-        "assert 'agents.etl_analyst' not in sys.modules; "
-        "assert 'agents.sql_analyst' not in sys.modules"
+        "import sys; import data_agent.agents; "
+        "assert 'data_agent.agents.data_analyst' not in sys.modules; "
+        "assert 'data_agent.agents.etl_analyst' not in sys.modules; "
+        "assert 'data_agent.agents.sql_analyst' not in sys.modules"
     )
 
     result = subprocess.run(
         [sys.executable, "-c", script],
-        cwd=PROJECT_ROOT,
+        cwd=PROJECT_ROOT / "src",
         capture_output=True,
         text=True,
         check=False,
@@ -30,9 +30,9 @@ def test_agents_package_does_not_eagerly_import_workflows():
 @pytest.mark.parametrize(
     "module_path",
     [
-        "agents/data_analyst.py",
-        "agents/etl_analyst.py",
-        "agents/sql_analyst.py",
+        "src/data_agent/agents/data_analyst.py",
+        "src/data_agent/agents/etl_analyst.py",
+        "src/data_agent/agents/sql_analyst.py",
     ],
 )
 def test_agent_imports_do_not_mutate_python_path(module_path):

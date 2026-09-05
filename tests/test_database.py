@@ -1,7 +1,7 @@
 import asyncio
 from unittest.mock import AsyncMock
 
-from utils.database import AsyncDatabaseUtil
+from data_agent.utils.database import AsyncDatabaseUtil
 
 
 class AsyncContext:
@@ -42,7 +42,7 @@ def run(awaitable):
 def test_connect_and_close_pool(monkeypatch):
     pool = FakePool(FakeConnection())
     create_pool = AsyncMock(return_value=pool)
-    monkeypatch.setattr("utils.database.asyncpg.create_pool", create_pool)
+    monkeypatch.setattr("data_agent.utils.database.asyncpg.create_pool", create_pool)
     database = AsyncDatabaseUtil("postgresql://test")
 
     run(database.connect())
@@ -55,7 +55,7 @@ def test_connect_and_close_pool(monkeypatch):
 
 def test_connect_failure_is_handled(monkeypatch, capsys):
     monkeypatch.setattr(
-        "utils.database.asyncpg.create_pool",
+        "data_agent.utils.database.asyncpg.create_pool",
         AsyncMock(side_effect=OSError("unavailable")),
     )
     database = AsyncDatabaseUtil("postgresql://test")

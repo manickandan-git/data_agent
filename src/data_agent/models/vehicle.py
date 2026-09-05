@@ -3,10 +3,10 @@ from typing import TYPE_CHECKING, ClassVar
 from sqlalchemy import Boolean, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from models.base import Base
+from data_agent.models.base import Base
 
 if TYPE_CHECKING:
-    from models.user import User
+    from data_agent.models.user import User
 
 
 class Vehicle(Base):

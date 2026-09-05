@@ -1,6 +1,6 @@
 from sqlalchemy.orm import configure_mappers
 
-from models import Base, Payment, Rating, Ride, User, Vehicle
+from data_agent.models import Base, Payment, Rating, Ride, User, Vehicle
 
 
 def test_all_expected_tables_are_registered():
