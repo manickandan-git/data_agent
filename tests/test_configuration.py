@@ -68,6 +68,7 @@ def test_secrets_are_redacted(settings_factory):
         ("app_environment", "local"),
         ("api_port", 0),
         ("api_workers", 0),
+        ("otel_trace_sample_ratio", 1.1),
         ("sql_categorical_columns", {"payments; DROP": ["payment_method"]}),
         ("sql_categorical_columns", {"payments": ["payment_method", "payment_method"]}),
     ],
@@ -156,6 +157,8 @@ def test_environment_safety_defaults_and_validation(settings_factory):
         settings_factory(api_reload=True, api_workers=2)
     with pytest.raises(ValidationError, match="DEBUG logging"):
         settings_factory(app_environment="production", observability_log_level="DEBUG")
+    with pytest.raises(ValidationError, match="OTEL_EXPORTER_ENDPOINT"):
+        settings_factory(otel_enabled=True)
 
 
 @pytest.mark.parametrize(

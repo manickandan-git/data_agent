@@ -11,7 +11,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from data_agent.agentschemas.workflow import WorkflowStatus
 from data_agent.config import get_config
-from data_agent.utils.observability import configure_observability
+from data_agent.utils.observability import (
+    configure_observability,
+    configure_telemetry,
+    set_span_attribute,
+)
 
 
 class QueryRequest(BaseModel):
@@ -38,7 +42,7 @@ def _default_workflow():
     return data_analyst
 
 
-def create_app(workflow=None, settings=None) -> FastAPI:
+def create_app(workflow=None, settings=None, *, span_exporter=None) -> FastAPI:
     """Build an API app; an injected workflow keeps endpoint tests offline."""
 
     def current_settings():
@@ -51,7 +55,12 @@ def create_app(workflow=None, settings=None) -> FastAPI:
             active_settings.observability_log_level,
             json_logs=active_settings.observability_json_logs,
         )
-        yield
+        telemetry_provider = getattr(_app.state, "telemetry_provider", None)
+        try:
+            yield
+        finally:
+            if telemetry_provider is not None:
+                telemetry_provider.shutdown()
 
     application = FastAPI(
         title="Data Agent API",
@@ -60,6 +69,11 @@ def create_app(workflow=None, settings=None) -> FastAPI:
         docs_url="/docs" if current_settings().api_docs_enabled else None,
         redoc_url="/redoc" if current_settings().api_docs_enabled else None,
         openapi_url="/openapi.json" if current_settings().api_docs_enabled else None,
+    )
+    application.state.telemetry_provider = configure_telemetry(
+        current_settings(),
+        application,
+        span_exporter=span_exporter,
     )
 
     @application.middleware("http")
@@ -95,6 +109,7 @@ def create_app(workflow=None, settings=None) -> FastAPI:
         raw_response: Response,
     ) -> QueryResponse:
         run_id = str(uuid4())
+        set_span_attribute("data_agent.run_id", run_id)
         active_workflow = workflow or _default_workflow()
         try:
             result = await run_in_threadpool(

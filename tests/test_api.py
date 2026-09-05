@@ -1,6 +1,7 @@
 from unittest.mock import Mock
 
 from fastapi.testclient import TestClient
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from data_agent.api import create_app
 from data_agent.config import Settings
@@ -96,3 +97,32 @@ def test_query_hides_unhandled_exception_details():
     assert response.json()["status"] == "error"
     assert response.json()["workflow_error"] == "The request could not be processed."
     assert "password" not in response.text
+
+
+def test_api_telemetry_correlates_request_without_exporting_question():
+    workflow = Mock()
+    workflow.invoke.return_value = {
+        "status": "success",
+        "route_response": "sql",
+        "final_answer": "safe answer",
+        "workflow_error": "",
+    }
+    exporter = InMemorySpanExporter()
+    settings = Settings(
+        _env_file=None,
+        app_environment="test",
+        otel_enabled=True,
+        otel_exporter_endpoint="http://collector.test/v1/traces",
+    )
+    app = create_app(workflow=workflow, settings=settings, span_exporter=exporter)
+
+    with TestClient(app) as client:
+        response = client.post("/api/v1/query", json={"question": "private question"})
+        client.get("/health")
+
+    spans = exporter.get_finished_spans()
+    correlated = [span for span in spans if "data_agent.run_id" in span.attributes]
+    assert response.status_code == 200
+    assert correlated[0].attributes["data_agent.run_id"] == response.headers["x-request-id"]
+    assert "private question" not in "".join(span.to_json() for span in spans)
+    assert all("/health" not in span.name for span in spans)

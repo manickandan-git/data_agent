@@ -155,7 +155,7 @@ Logging is not configured during import. Applications invoking graphs directly
 can enable it explicitly:
 
 ```python
-from utils.observability import configure_observability
+from data_agent.utils.observability import configure_observability
 
 configure_observability("INFO", json_logs=True)
 ```
@@ -163,6 +163,31 @@ configure_observability("INFO", json_logs=True)
 Observability events intentionally exclude prompts, generated SQL, database
 results, source records, URLs, credentials, and exception messages. Failed-node
 events record only the exception type.
+
+OpenTelemetry tracing is disabled by default. To send traces to an OTLP HTTP
+collector, configure its `/v1/traces` endpoint:
+
+```dotenv
+OTEL_ENABLED=true
+OTEL_SERVICE_NAME=data-agent
+OTEL_EXPORTER_ENDPOINT=http://localhost:4318/v1/traces
+OTEL_EXPORT_TIMEOUT_SECONDS=10
+OTEL_TRACE_SAMPLE_RATIO=1
+OTEL_EXCLUDED_URLS=/health
+```
+
+API requests and workflow nodes then participate in the same distributed trace.
+JSON logs emitted inside a sampled span include `trace_id` and `span_id`, while
+workflow spans carry the safe `run_id` correlation attribute. Health checks are
+excluded by default to reduce noise. `OTEL_EXCLUDED_URLS` accepts the URL pattern
+syntax supported by the OpenTelemetry FastAPI instrumentation.
+
+Use a sample ratio below `1` for high-volume production services. Send telemetry
+to an OpenTelemetry Collector rather than embedding vendor credentials in code;
+standard exporter environment variables such as `OTEL_EXPORTER_OTLP_HEADERS`
+can supply collector authentication. Tracing never adds prompts, generated SQL,
+query results, extracted records, credentials, full URLs, or exception messages
+as custom span attributes.
 
 ### Database and SQL
 

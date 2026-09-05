@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     openai_base_url: str | None = None
     observability_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     observability_json_logs: bool = True
+    otel_enabled: bool = False
+    otel_service_name: str = Field(default="data-agent", min_length=1, max_length=128)
+    otel_exporter_endpoint: str | None = None
+    otel_export_timeout_seconds: float = Field(default=10, gt=0, le=60)
+    otel_trace_sample_ratio: float = Field(default=1, ge=0, le=1)
+    otel_excluded_urls: str = "/health"
     api_host: str = "127.0.0.1"
     api_port: int = Field(default=8000, ge=1, le=65_535)
     api_workers: int = Field(default=1, ge=1, le=32)
@@ -104,6 +110,8 @@ class Settings(BaseSettings):
             raise ValueError("API_RELOAD must be disabled in staging and production.")
         if self.app_environment == "production" and self.observability_log_level == "DEBUG":
             raise ValueError("DEBUG logging must be disabled in production.")
+        if self.otel_enabled and not self.otel_exporter_endpoint:
+            raise ValueError("OTEL_EXPORTER_ENDPOINT is required when OTEL_ENABLED=true.")
         if self.api_docs_enabled is None:
             self.api_docs_enabled = self.app_environment != "production"
         return self
