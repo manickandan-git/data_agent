@@ -30,6 +30,7 @@ def test_defaults_do_not_require_provider_keys(settings_factory):
     assert settings.sql_timeout_seconds == 30
     assert settings.observability_log_level == "INFO"
     assert settings.observability_json_logs is True
+    assert settings.api_max_request_bytes == 16_384
 
 
 def test_default_categorical_columns_cover_safe_seed_dimensions(settings_factory):
@@ -52,6 +53,7 @@ def test_secrets_are_redacted(settings_factory):
     ("sql_timeout_seconds", 0), ("sql_row_limit", -1),
     ("llm_max_retries", -1), ("database_schema", "public; DROP TABLE users"),
     ("observability_log_level", "TRACE"),
+    ("api_max_request_bytes", 100),
     ("sql_categorical_columns", {"payments; DROP": ["payment_method"]}),
     ("sql_categorical_columns", {"payments": ["payment_method", "payment_method"]}),
 ])

@@ -186,7 +186,56 @@ commands, arbitrary expressions, and arbitrary file operations are not run.
 
 ## Usage
 
-Run the example:
+### HTTP API
+
+Start the development server on localhost:
+
+```powershell
+uvicorn api:app --host 127.0.0.1 --port 8000
+```
+
+Interactive OpenAPI documentation is available at
+`http://127.0.0.1:8000/docs`. Check liveness with:
+
+```http
+GET /health
+```
+
+Submit a question with:
+
+```http
+POST /api/v1/query
+Content-Type: application/json
+
+{
+  "question": "What payment methods are available in the database?"
+}
+```
+
+The response contains only the public workflow contract:
+
+```json
+{
+  "run_id": "correlation-id",
+  "status": "success",
+  "route": "sql",
+  "final_answer": "The available payment methods are ...",
+  "workflow_error": ""
+}
+```
+
+The API also returns the correlation ID in the `X-Request-ID` response header.
+Invalid models return HTTP 422, oversized bodies return HTTP 413, and workflow
+errors return HTTP 500 with safe details. Request bodies default to a 16 KiB
+limit controlled by `API_MAX_REQUEST_BYTES`.
+
+Authentication and rate limiting are not implemented yet. Keep the service
+bound to localhost or behind an authenticated gateway until those controls are
+added.
+
+### Python
+
+Run the example entry point:
 
 ```powershell
 python main.py
@@ -282,6 +331,7 @@ vehicles. Alembic creates the tables and loads the supplied CSV seed data.
 
 ```text
 data_agent/
+├── api.py                  # Versioned FastAPI HTTP interface
 ├── agents/                 # Router, SQL, and ETL graphs
 ├── agentschemas/           # Workflow state and structured LLM schemas
 ├── data/

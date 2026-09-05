@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     openai_base_url: str | None = None
     observability_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     observability_json_logs: bool = True
+    api_max_request_bytes: int = Field(default=16_384, ge=1_024, le=1_048_576)
     database_url: SecretStr | None = None
     database_schema: str = Field(default="public", pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     sql_row_limit: int = Field(default=10, ge=1, le=100_000)
