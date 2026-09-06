@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     api_workers: int = Field(default=1, ge=1, le=32)
     api_reload: bool = False
     api_docs_enabled: bool | None = None
+    api_auth_enabled: bool | None = None
+    api_keys: SecretStr | None = None
+    api_rate_limit_requests: int = Field(default=60, ge=1, le=100_000)
+    api_rate_limit_window_seconds: float = Field(default=60, ge=1, le=3_600)
+    api_max_concurrent_requests: int = Field(default=4, ge=1, le=1_000)
     api_max_request_bytes: int = Field(default=16_384, ge=1_024, le=1_048_576)
     database_url: SecretStr | None = None
     database_schema: str = Field(default="public", pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -116,7 +121,25 @@ class Settings(BaseSettings):
             raise ValueError("OTEL_EXPORTER_ENDPOINT is required when OTEL_ENABLED=true.")
         if self.api_docs_enabled is None:
             self.api_docs_enabled = self.app_environment != "production"
+        if self.api_auth_enabled is None:
+            self.api_auth_enabled = self.app_environment == "production"
+        if self.app_environment == "production" and not self.api_auth_enabled:
+            raise ValueError("API authentication cannot be disabled in production.")
+        if self.api_auth_enabled:
+            keys = self.configured_api_keys()
+            if not keys:
+                raise ValueError("API_KEYS is required when API authentication is enabled.")
+            if any(len(key) < 32 for key in keys):
+                raise ValueError("Every API key must contain at least 32 characters.")
         return self
+
+    def configured_api_keys(self) -> tuple[str, ...]:
+        """Return configured bearer keys without exposing them in model output."""
+        if not self.api_keys:
+            return ()
+        return tuple(
+            key.strip() for key in self.api_keys.get_secret_value().split(",") if key.strip()
+        )
 
     def require_database_url(self) -> str:
         if not self.database_url or not self.database_url.get_secret_value():

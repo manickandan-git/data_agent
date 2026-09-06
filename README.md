@@ -274,6 +274,37 @@ commands, arbitrary expressions, and arbitrary file operations are not run.
 
 ### HTTP API
 
+The `/health` endpoint is public so load balancers can check the process. The
+`/api/v1/query` endpoint supports bearer API-key authentication, per-key rate
+limits, and a process-wide workflow concurrency limit:
+
+```dotenv
+API_AUTH_ENABLED=true
+API_KEYS=replace-with-at-least-32-random-characters
+API_RATE_LIMIT_REQUESTS=60
+API_RATE_LIMIT_WINDOW_SECONDS=60
+API_MAX_CONCURRENT_REQUESTS=4
+```
+
+Send a configured key in the standard authorization header:
+
+```http
+Authorization: Bearer replace-with-at-least-32-random-characters
+```
+
+Production requires authentication and refuses to start if it is disabled, no
+key is configured, or any key is shorter than 32 characters. Multiple keys can
+be comma-separated during client separation or key rotation. Keys are held as
+secrets, hashed before comparison and limiter bucketing, compared in constant
+time, and never added to logs or telemetry.
+
+Authentication failures return `401`; exceeded request limits return `429`
+with `Retry-After`; and exhausted workflow capacity returns `503` immediately
+instead of building an unbounded queue. Rate and concurrency state is local to
+each API process. With multiple `API_WORKERS`, the effective service-wide limits
+are multiplied by the worker count. Use a shared gateway or Redis-backed limiter
+when limits must be enforced globally across workers or application instances.
+
 Start the development server on localhost:
 
 ```powershell

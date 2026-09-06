@@ -3,14 +3,20 @@
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, Security, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, ConfigDict, Field
 
 from data_agent.agentschemas.workflow import WorkflowStatus
 from data_agent.config import get_config
+from data_agent.utils.api_security import (
+    APIKeyAuthenticator,
+    ConcurrencyLimiter,
+    SlidingWindowRateLimiter,
+)
 from data_agent.utils.observability import (
     configure_observability,
     configure_telemetry,
@@ -62,6 +68,7 @@ def create_app(workflow=None, settings=None, *, span_exporter=None, metric_reade
             if telemetry_provider is not None:
                 telemetry_provider.shutdown()
 
+    active_settings = current_settings()
     application = FastAPI(
         title="Data Agent API",
         version="1.0.0",
@@ -71,11 +78,48 @@ def create_app(workflow=None, settings=None, *, span_exporter=None, metric_reade
         openapi_url="/openapi.json" if current_settings().api_docs_enabled else None,
     )
     application.state.telemetry_provider = configure_telemetry(
-        current_settings(),
+        active_settings,
         application,
         span_exporter=span_exporter,
         metric_reader=metric_reader,
     )
+    authenticator = APIKeyAuthenticator(active_settings.configured_api_keys())
+    rate_limiter = SlidingWindowRateLimiter(
+        active_settings.api_rate_limit_requests,
+        active_settings.api_rate_limit_window_seconds,
+    )
+    concurrency_limiter = ConcurrencyLimiter(active_settings.api_max_concurrent_requests)
+    application.state.concurrency_limiter = concurrency_limiter
+    bearer = HTTPBearer(auto_error=False)
+
+    async def authorize_and_limit(
+        credentials: HTTPAuthorizationCredentials | None = Security(bearer),
+    ) -> str:
+        if active_settings.api_auth_enabled:
+            if credentials is None or credentials.scheme.lower() != "bearer":
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Valid bearer authentication is required.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            client_id = authenticator.authenticate(credentials.credentials)
+            if client_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Valid bearer authentication is required.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        else:
+            client_id = "anonymous"
+
+        allowed, retry_after = await rate_limiter.allow(client_id)
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Request rate limit exceeded.",
+                headers={"Retry-After": str(retry_after)},
+            )
+        return client_id
 
     @application.middleware("http")
     async def limit_request_size(request: Request, call_next):
@@ -108,26 +152,36 @@ def create_app(workflow=None, settings=None, *, span_exporter=None, metric_reade
         payload: QueryRequest,
         request: Request,
         raw_response: Response,
+        _client_id: str = Depends(authorize_and_limit),
     ) -> QueryResponse:
         run_id = str(uuid4())
         set_span_attribute("data_agent.run_id", run_id)
         active_workflow = workflow or _default_workflow()
-        try:
-            result = await run_in_threadpool(
-                active_workflow.invoke,
-                {
-                    "messages": [HumanMessage(content=payload.question)],
-                    "run_id": run_id,
-                },
+        if not await concurrency_limiter.try_acquire():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="The service is at its workflow concurrency limit.",
+                headers={"Retry-After": "1"},
             )
-        except (RuntimeError, ValueError, TypeError):
-            result = {
-                "run_id": run_id,
-                "status": "error",
-                "route_response": "",
-                "final_answer": "The request could not be processed.",
-                "workflow_error": "The request could not be processed.",
-            }
+        try:
+            try:
+                result = await run_in_threadpool(
+                    active_workflow.invoke,
+                    {
+                        "messages": [HumanMessage(content=payload.question)],
+                        "run_id": run_id,
+                    },
+                )
+            except (RuntimeError, ValueError, TypeError):
+                result = {
+                    "run_id": run_id,
+                    "status": "error",
+                    "route_response": "",
+                    "final_answer": "The request could not be processed.",
+                    "workflow_error": "The request could not be processed.",
+                }
+        finally:
+            await concurrency_limiter.release()
 
         response = QueryResponse(
             run_id=result.get("run_id") or run_id,

@@ -147,18 +147,46 @@ def test_profile_files_override_base_configuration(tmp_path, monkeypatch):
 
 
 def test_environment_safety_defaults_and_validation(settings_factory):
-    assert settings_factory(app_environment="production").api_docs_enabled is False
+    production = settings_factory(
+        app_environment="production",
+        api_keys="a" * 32,
+    )
+    assert production.api_docs_enabled is False
+    assert production.api_auth_enabled is True
     assert settings_factory(app_environment="staging").api_docs_enabled is True
-    assert settings_factory(app_environment="production", api_docs_enabled=True).api_docs_enabled
+    assert settings_factory(
+        app_environment="production",
+        api_docs_enabled=True,
+        api_keys="a" * 32,
+    ).api_docs_enabled
 
     with pytest.raises(ValidationError, match="API_RELOAD must be disabled"):
         settings_factory(app_environment="production", api_reload=True)
     with pytest.raises(ValidationError, match="API_RELOAD requires API_WORKERS=1"):
         settings_factory(api_reload=True, api_workers=2)
     with pytest.raises(ValidationError, match="DEBUG logging"):
-        settings_factory(app_environment="production", observability_log_level="DEBUG")
+        settings_factory(
+            app_environment="production",
+            observability_log_level="DEBUG",
+            api_keys="a" * 32,
+        )
     with pytest.raises(ValidationError, match="OTEL_EXPORTER_ENDPOINT"):
         settings_factory(otel_enabled=True)
+    with pytest.raises(ValidationError, match="API_KEYS is required"):
+        settings_factory(app_environment="production")
+    with pytest.raises(ValidationError, match="cannot be disabled"):
+        settings_factory(app_environment="production", api_auth_enabled=False)
+    with pytest.raises(ValidationError, match="at least 32"):
+        settings_factory(api_auth_enabled=True, api_keys="too-short")
+
+
+def test_api_keys_are_redacted_and_normalized(settings_factory):
+    settings = settings_factory(
+        api_auth_enabled=True,
+        api_keys=f"{'a' * 32}, {'b' * 32}",
+    )
+    assert settings.configured_api_keys() == ("a" * 32, "b" * 32)
+    assert "a" * 32 not in repr(settings)
 
 
 @pytest.mark.parametrize(
