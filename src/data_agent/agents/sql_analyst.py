@@ -12,7 +12,7 @@ from data_agent.agentschemas.judge import JudgeSchema
 from data_agent.agentschemas.question import QuestionReview
 from data_agent.config import get_config
 from data_agent.utils.database import AsyncDatabaseUtil
-from data_agent.utils.llm_pick import pick_llm, structured_llm
+from data_agent.utils.llm_pick import observed_llm_invoke, pick_llm, structured_llm
 from data_agent.utils.observability import observed_node
 from data_agent.utils.sql_safety import validate_read_only_sql
 
@@ -168,7 +168,7 @@ def validate_question(state: AgentSchema) -> AgentSchema:
     Database metadata: {state.schema_context}
     """
     try:
-        review = structured_llm("medium", QuestionReview).invoke(prompt)
+        review = observed_llm_invoke(structured_llm("medium", QuestionReview), prompt, "medium")
         # Validate even when a provider adapter returns a plain dictionary.
         if isinstance(review, QuestionReview):
             review = review.model_dump()
@@ -218,7 +218,7 @@ def generate_sql_query(state: AgentSchema) -> AgentSchema:
     prompt = state.prompt_query_context
 
     try:
-        generated_sql_query = pick_llm("medium").invoke(prompt)
+        generated_sql_query = observed_llm_invoke(pick_llm("medium"), prompt, "medium")
         state.generated_sql_query = clean_sql_query(_response_text(generated_sql_query))
     except (RuntimeError, TypeError, ValueError):
         state.workflow_error = "SQL generation failed. Check the model configuration or try again."
@@ -265,7 +265,7 @@ def is_safe_sql(state: AgentSchema) -> AgentSchema:
 
     try:
         llm_judge = structured_llm("medium", JudgeSchema)
-        response = llm_judge.invoke(prompt).model_dump()
+        response = observed_llm_invoke(llm_judge, prompt, "medium").model_dump()
     except (AttributeError, KeyError, TypeError, ValueError, RuntimeError):
         state.is_safe = "No"
         state.comments = "The relevance review failed; the query was not executed."
@@ -384,7 +384,7 @@ def representation_final_answer(state: AgentSchema) -> AgentSchema:
     """
 
     try:
-        llm_response = _response_text(pick_llm("low").invoke(prompt))
+        llm_response = _response_text(observed_llm_invoke(pick_llm("low"), prompt, "low"))
     except (AttributeError, RuntimeError, TypeError, ValueError):
         state.workflow_error = "The query completed, but its results could not be summarized."
         return finish_error(state)

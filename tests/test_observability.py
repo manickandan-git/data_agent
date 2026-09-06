@@ -1,16 +1,21 @@
 import json
 import logging
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
+from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from data_agent.agentschemas import DataSchema
 from data_agent.config import Settings
+from data_agent.utils.llm_pick import observed_llm_invoke
 from data_agent.utils.observability import (
     configure_observability,
     configure_telemetry,
     log_event,
     observed_node,
+    record_value,
 )
 
 
@@ -77,7 +82,11 @@ def test_workflow_span_contains_only_safe_operational_attributes():
         otel_exporter_endpoint="http://collector.test/v1/traces",
         app_environment="test",
     )
-    provider = configure_telemetry(settings, span_exporter=exporter)
+    provider = configure_telemetry(
+        settings,
+        span_exporter=exporter,
+        metric_reader=InMemoryMetricReader(),
+    )
     state = DataSchema(messages=[])
 
     observed_node("sql", "generate", lambda value: value)(state)
@@ -102,7 +111,11 @@ def test_json_logs_include_active_trace_correlation(capsys):
         otel_enabled=True,
         otel_exporter_endpoint="http://collector.test/v1/traces",
     )
-    provider = configure_telemetry(settings, span_exporter=exporter)
+    provider = configure_telemetry(
+        settings,
+        span_exporter=exporter,
+        metric_reader=InMemoryMetricReader(),
+    )
     configure_observability("INFO", json_logs=True)
 
     with provider.get_tracer("test").start_as_current_span("test-span"):
@@ -121,7 +134,11 @@ def test_failed_span_does_not_export_exception_message():
         otel_enabled=True,
         otel_exporter_endpoint="http://collector.test/v1/traces",
     )
-    provider = configure_telemetry(settings, span_exporter=exporter)
+    provider = configure_telemetry(
+        settings,
+        span_exporter=exporter,
+        metric_reader=InMemoryMetricReader(),
+    )
 
     with pytest.raises(RuntimeError):
         observed_node(
@@ -136,3 +153,86 @@ def test_failed_span_does_not_export_exception_message():
     assert span.attributes["exception.type"] == "RuntimeError"
     assert "secret payload" not in str(span.to_json())
     provider.shutdown()
+
+
+def test_operation_metrics_capture_counts_durations_and_values():
+    exporter = InMemorySpanExporter()
+    reader = InMemoryMetricReader()
+    settings = Settings(
+        _env_file=None,
+        otel_enabled=True,
+        otel_exporter_endpoint="http://collector.test/v1/traces",
+    )
+    runtime = configure_telemetry(
+        settings,
+        span_exporter=exporter,
+        metric_reader=reader,
+    )
+
+    observed_node("sql", "execute", lambda state: state)(DataSchema(messages=[]))
+    record_value("sql.execute", 3, kind="rows")
+
+    metrics = {
+        metric.name: metric
+        for resource_metric in reader.get_metrics_data().resource_metrics
+        for scope_metric in resource_metric.scope_metrics
+        for metric in scope_metric.metrics
+    }
+    assert {
+        "data_agent.operation.count",
+        "data_agent.operation.duration",
+        "data_agent.operation.value",
+    } <= metrics.keys()
+    count_points = metrics["data_agent.operation.count"].data.data_points
+    assert any(point.attributes["operation"] == "workflow.node" for point in count_points)
+    value_points = metrics["data_agent.operation.value"].data.data_points
+    assert any(point.attributes["value.kind"] == "rows" for point in value_points)
+    runtime.shutdown()
+
+
+def test_llm_telemetry_records_model_and_tokens_without_payload():
+    exporter = InMemorySpanExporter()
+    reader = InMemoryMetricReader()
+    settings = Settings(_env_file=None, openai_api_key="test-key")
+    telemetry_settings = settings.model_copy(
+        update={
+            "otel_enabled": True,
+            "otel_exporter_endpoint": "http://collector.test/v1/traces",
+        }
+    )
+    runtime = configure_telemetry(
+        telemetry_settings,
+        span_exporter=exporter,
+        metric_reader=reader,
+    )
+    runnable = Mock(
+        invoke=Mock(
+            return_value=SimpleNamespace(
+                usage_metadata={"input_tokens": 4, "output_tokens": 2, "total_tokens": 6}
+            )
+        )
+    )
+
+    observed_llm_invoke(runnable, "private prompt", "low", settings)
+
+    runtime.force_flush()
+    span = exporter.get_finished_spans()[0]
+    assert span.name == "llm.invoke"
+    assert span.attributes["gen_ai.provider.name"] == "openai"
+    assert span.attributes["gen_ai.request.model"] == "gpt-5.6-luna"
+    assert "private prompt" not in span.to_json()
+    metrics_data = reader.get_metrics_data()
+    value_points = [
+        point
+        for resource_metric in metrics_data.resource_metrics
+        for scope_metric in resource_metric.scope_metrics
+        for metric in scope_metric.metrics
+        if metric.name == "data_agent.operation.value"
+        for point in metric.data.data_points
+    ]
+    assert {point.attributes["value.kind"] for point in value_points} == {
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+    }
+    runtime.shutdown()

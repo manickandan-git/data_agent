@@ -3,9 +3,13 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
+from time import perf_counter
 from typing import Any
 
+from opentelemetry.trace import Status, StatusCode
+
 from data_agent.config import Settings, get_config
+from data_agent.utils.observability import record_operation, record_value, start_operation_span
 
 
 @dataclass(frozen=True)
@@ -130,3 +134,35 @@ def structured_llm(level: str, schema: type, settings: Settings | None = None):
     adapter, _ = _resolve(level, effective_settings)
     options = {"method": adapter.structured_method} if adapter.structured_method else {}
     return client.with_structured_output(schema, **options)
+
+
+def observed_llm_invoke(runnable, payload, level: str, settings: Settings | None = None):
+    """Invoke an LLM with provider metadata, never prompt or response content."""
+    effective_settings = settings if settings is not None else get_llm_factory().settings
+    _, model = _resolve(level, effective_settings)
+    attributes = {
+        "gen_ai.provider.name": effective_settings.llm_provider.lower(),
+        "gen_ai.request.model": model,
+        "data_agent.difficulty": level.lower(),
+    }
+    started = perf_counter()
+    with start_operation_span("llm.invoke", attributes) as span:
+        try:
+            response = runnable.invoke(payload)
+        except Exception as error:
+            duration_ms = (perf_counter() - started) * 1000
+            if span.is_recording():
+                span.set_attribute("exception.type", type(error).__name__)
+                span.set_status(Status(StatusCode.ERROR))
+            record_operation("llm.invoke", duration_ms, outcome="error", attributes=attributes)
+            raise
+
+        duration_ms = (perf_counter() - started) * 1000
+        record_operation("llm.invoke", duration_ms, outcome="success", attributes=attributes)
+        usage = getattr(response, "usage_metadata", None)
+        if isinstance(usage, dict):
+            for key in ("input_tokens", "output_tokens", "total_tokens"):
+                value = usage.get(key)
+                if isinstance(value, int):
+                    record_value("llm.invoke", value, kind=key, attributes=attributes)
+        return response

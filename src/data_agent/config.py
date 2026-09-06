@@ -56,7 +56,9 @@ class Settings(BaseSettings):
     otel_enabled: bool = False
     otel_service_name: str = Field(default="data-agent", min_length=1, max_length=128)
     otel_exporter_endpoint: str | None = None
+    otel_metrics_exporter_endpoint: str | None = None
     otel_export_timeout_seconds: float = Field(default=10, gt=0, le=60)
+    otel_metric_export_interval_seconds: float = Field(default=60, ge=5, le=300)
     otel_trace_sample_ratio: float = Field(default=1, ge=0, le=1)
     otel_excluded_urls: str = "/health"
     api_host: str = "127.0.0.1"

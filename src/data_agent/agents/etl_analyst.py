@@ -4,7 +4,7 @@ from langgraph.graph import END, START, StateGraph
 
 from data_agent.agentschemas import ETLSchema, TransformationPlan
 from data_agent.utils.etl_tools import ETLTools
-from data_agent.utils.llm_pick import pick_llm, structured_llm
+from data_agent.utils.llm_pick import observed_llm_invoke, pick_llm, structured_llm
 from data_agent.utils.observability import observed_node
 
 
@@ -76,7 +76,7 @@ def transform_load_tool(
 
         """
 
-    plan = llm.invoke(prompt)
+    plan = observed_llm_invoke(llm, prompt, "medium")
 
     try:
         result = etl_tools.transform_load(
@@ -111,7 +111,7 @@ def llm_node(state: ETLSchema):
     """
 
     try:
-        final_answer = pick_llm("medium").bind_tools(tools).invoke(prompt)
+        final_answer = observed_llm_invoke(pick_llm("medium").bind_tools(tools), prompt, "medium")
     except (RuntimeError, TypeError, ValueError):
         state.status = "error"
         state.workflow_error = (

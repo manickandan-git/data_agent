@@ -1,6 +1,7 @@
 from unittest.mock import Mock
 
 from fastapi.testclient import TestClient
+from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from data_agent.api import create_app
@@ -114,7 +115,12 @@ def test_api_telemetry_correlates_request_without_exporting_question():
         otel_enabled=True,
         otel_exporter_endpoint="http://collector.test/v1/traces",
     )
-    app = create_app(workflow=workflow, settings=settings, span_exporter=exporter)
+    app = create_app(
+        workflow=workflow,
+        settings=settings,
+        span_exporter=exporter,
+        metric_reader=InMemoryMetricReader(),
+    )
 
     with TestClient(app) as client:
         response = client.post("/api/v1/query", json={"question": "private question"})

@@ -171,7 +171,9 @@ collector, configure its `/v1/traces` endpoint:
 OTEL_ENABLED=true
 OTEL_SERVICE_NAME=data-agent
 OTEL_EXPORTER_ENDPOINT=http://localhost:4318/v1/traces
+OTEL_METRICS_EXPORTER_ENDPOINT=http://localhost:4318/v1/metrics
 OTEL_EXPORT_TIMEOUT_SECONDS=10
+OTEL_METRIC_EXPORT_INTERVAL_SECONDS=60
 OTEL_TRACE_SAMPLE_RATIO=1
 OTEL_EXCLUDED_URLS=/health
 ```
@@ -188,6 +190,22 @@ standard exporter environment variables such as `OTEL_EXPORTER_OTLP_HEADERS`
 can supply collector authentication. Tracing never adds prompts, generated SQL,
 query results, extracted records, credentials, full URLs, or exception messages
 as custom span attributes.
+
+The application exports standard FastAPI HTTP server metrics plus these bounded
+custom instruments:
+
+| Instrument | Meaning |
+| --- | --- |
+| `data_agent.operation.count` | Completed operations grouped by operation and outcome |
+| `data_agent.operation.duration` | LLM, SQL, ETL, and workflow latency in milliseconds |
+| `data_agent.operation.value` | Token, row, page, and retry counts |
+
+Operational dimensions include workflow/node names, LLM provider/model and
+difficulty, SQL operation type, ETL stage, outcome, and value kind. They never
+include prompts, responses, SQL text, URLs, file paths, database results, or
+records. LLM token metrics are emitted only when the selected provider returns
+usage metadata. If `OTEL_METRICS_EXPORTER_ENDPOINT` is omitted, the application
+derives it by replacing `/v1/traces` in the trace endpoint with `/v1/metrics`.
 
 ### Database and SQL
 

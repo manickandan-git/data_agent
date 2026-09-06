@@ -3,6 +3,8 @@
 import re
 from dataclasses import dataclass
 
+from data_agent.utils.observability import observed_operation
+
 
 @dataclass(frozen=True)
 class SQLSafetyResult:
@@ -127,6 +129,11 @@ def _strip_literals_and_comments(query: str) -> str:
     return "".join(output)
 
 
+@observed_operation(
+    "sql.validate",
+    attributes={"db.operation.type": "select"},
+    failure_when=lambda result: not result.is_safe,
+)
 def validate_read_only_sql(query: str) -> SQLSafetyResult:
     """Allow exactly one read-only SELECT statement (optionally using WITH)."""
     if not query or not query.strip():

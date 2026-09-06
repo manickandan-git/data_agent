@@ -6,6 +6,7 @@ import pandas as pd
 
 from data_agent.agentschemas.transformation import FilterRule, TransformationPlan
 from data_agent.utils.api_extractor import ExtractionError, fetch_records
+from data_agent.utils.observability import observed_operation, record_value
 
 
 class ETLTools:
@@ -47,6 +48,7 @@ class ETLTools:
         if output_file.exists():
             raise FileExistsError(f"Refusing to overwrite existing output file: {output_file}")
 
+    @observed_operation("etl.load", attributes={"etl.stage": "load"})
     def extract_load(
         self,
         url: str,
@@ -181,6 +183,7 @@ class ETLTools:
 
         return df.loc[mask.fillna(False)]
 
+    @observed_operation("etl.transform", attributes={"etl.stage": "transform"})
     def transform_load(
         self,
         input_file_path: str,
@@ -255,6 +258,7 @@ class ETLTools:
         else:
             df.to_parquet(output_file, index=False)
 
+        record_value("etl.transform", len(df), kind="rows")
         return f"Transformed {len(df)} rows and saved them to {output_file}."
 
 

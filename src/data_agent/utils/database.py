@@ -1,5 +1,7 @@
 import asyncpg
 
+from data_agent.utils.observability import observed_async_operation, record_value
+
 
 class AsyncDatabaseUtil:
     def __init__(self, database_url):
@@ -17,6 +19,10 @@ class AsyncDatabaseUtil:
                 print(f"Error creating connection pool: {e}")
                 self._pool = None
 
+    @observed_async_operation(
+        "sql.schema",
+        failure_when=lambda result: isinstance(result, str) and result.startswith("Error"),
+    )
     async def schema_details(
         self,
         schema_name,
@@ -102,6 +108,11 @@ class AsyncDatabaseUtil:
 
         return schema_info_context
 
+    @observed_async_operation(
+        "sql.execute",
+        attributes={"db.operation.type": "generic"},
+        failure_when=lambda result: result is None,
+    )
     async def execute_sql(self, query, *args):
         """Executes generic SQL queries asynchronously."""
         if not self._pool:
@@ -121,6 +132,11 @@ class AsyncDatabaseUtil:
                 print(f"Error executing query: {e}")
                 return None
 
+    @observed_async_operation(
+        "sql.execute",
+        attributes={"db.operation.type": "select"},
+        failure_when=lambda result: result is None,
+    )
     async def execute_read_only_sql(self, query, *args, timeout=30.0):
         """Fetch rows inside a database-enforced read-only transaction."""
         if not self._pool:
@@ -131,6 +147,7 @@ class AsyncDatabaseUtil:
             try:
                 async with connection.transaction(readonly=True):
                     result = await connection.fetch(query, *args, timeout=timeout)
+                record_value("sql.execute", len(result), kind="rows")
                 return str([tuple(row.values()) for row in result])
             except (asyncpg.PostgresError, OSError, TimeoutError) as e:
                 print(f"Error executing read-only query: {e}")

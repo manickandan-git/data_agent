@@ -6,6 +6,7 @@ from urllib.parse import urljoin, urlsplit
 import requests
 
 from data_agent.config import get_config
+from data_agent.utils.observability import observed_operation, record_value
 
 
 class ExtractionError(ValueError):
@@ -28,6 +29,7 @@ def at_path(payload, path):
     return value
 
 
+@observed_operation("etl.extract", attributes={"etl.stage": "extract"})
 def fetch_records(url, records_path="results", next_path="next", settings=None):
     settings = settings or get_config()
     first_origin = origin(url)
@@ -80,12 +82,15 @@ def fetch_records(url, records_path="results", next_path="next", settings=None):
                     break
                 if attempt == settings.etl_max_retries:
                     raise ExtractionError("API request failed after bounded retries.")
+                record_value("etl.extract", 1, kind="retries")
                 time.sleep(min(2**attempt, 8))
 
             records = at_path(payload, records_path)
             if not isinstance(records, list) or any(not isinstance(row, dict) for row in records):
                 raise ExtractionError("Records must be a JSON array of objects.")
             rows.extend(records)
+            record_value("etl.extract", 1, kind="pages")
+            record_value("etl.extract", len(records), kind="rows")
             if len(rows) > settings.etl_max_rows:
                 raise ExtractionError("Extraction row limit exceeded; no output was saved.")
             if not next_path or (next_path == "next" and isinstance(payload, list)):

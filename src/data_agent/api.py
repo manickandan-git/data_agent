@@ -42,7 +42,7 @@ def _default_workflow():
     return data_analyst
 
 
-def create_app(workflow=None, settings=None, *, span_exporter=None) -> FastAPI:
+def create_app(workflow=None, settings=None, *, span_exporter=None, metric_reader=None) -> FastAPI:
     """Build an API app; an injected workflow keeps endpoint tests offline."""
 
     def current_settings():
@@ -74,6 +74,7 @@ def create_app(workflow=None, settings=None, *, span_exporter=None) -> FastAPI:
         current_settings(),
         application,
         span_exporter=span_exporter,
+        metric_reader=metric_reader,
     )
 
     @application.middleware("http")

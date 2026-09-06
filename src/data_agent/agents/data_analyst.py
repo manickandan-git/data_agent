@@ -4,7 +4,7 @@ from langgraph.graph import END, START, StateGraph
 from data_agent.agents.etl_analyst import etl_analyst
 from data_agent.agents.sql_analyst import sql_analyst
 from data_agent.agentschemas import DataSchema, RouterSchema
-from data_agent.utils.llm_pick import structured_llm
+from data_agent.utils.llm_pick import observed_llm_invoke, structured_llm
 from data_agent.utils.observability import observed_node
 
 # ---------------------------- DATA AGENT GRAPH ---------------------------- #
@@ -15,7 +15,9 @@ def router_node(state: DataSchema):
     message = state.messages[-1].content
 
     try:
-        route_response_dict = structured_llm("medium", RouterSchema).invoke(message).model_dump()
+        route_response_dict = observed_llm_invoke(
+            structured_llm("medium", RouterSchema), message, "medium"
+        ).model_dump()
     except (AttributeError, RuntimeError, TypeError, ValueError):
         state.status = "error"
         state.workflow_error = "The request could not be routed. Check the model configuration."
