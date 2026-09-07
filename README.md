@@ -7,6 +7,9 @@ extraction and local dataset transformation.
 It uses LangChain-compatible chat models, Pydantic structured outputs,
 SQLAlchemy models, Alembic migrations, and pandas-based ETL operations.
 
+Product requirements and engineering designs are maintained in the
+[`docs`](docs/README.md) directory.
+
 ## Features
 
 - LLM routing between SQL and ETL workflows.
@@ -26,6 +29,7 @@ SQLAlchemy models, Alembic migrations, and pandas-based ETL operations.
 - Python 3.13 or newer.
 - PostgreSQL for database questions and migrations.
 - An API key for the selected LLM provider.
+- Docker with Compose v2 when running the production-style local stack.
 
 ## Installation
 
@@ -87,6 +91,73 @@ APP_ENVIRONMENT=staging
 
 Do not commit `.env` or `.env.<environment>` files containing secrets. The
 `test` profile is intended for automated tests, not for weakening validation.
+
+### Configuration reference
+
+All names below are optional unless a requirement is noted. Values shown are
+the application defaults. Pydantic reads names case-insensitively from the
+process environment, `.env`, and the selected `.env.<environment>` profile.
+
+| Setting | Default | Purpose and validation |
+| --- | --- | --- |
+| `APP_ENVIRONMENT` | `development` | One of `development`, `test`, `staging`, or `production` |
+| `LLM_PROVIDER` | `openai` | Registered LLM provider name |
+| `LLM_MODEL_LOW` | provider default | Optional low-complexity model override |
+| `LLM_MODEL_MEDIUM` | provider default | Optional medium-complexity model override |
+| `LLM_MODEL_HIGH` | provider default | Optional high-complexity model override |
+| `LLM_TEMPERATURE` | `0` | From `0` through `1` |
+| `LLM_TIMEOUT_SECONDS` | `60` | Positive provider request timeout |
+| `LLM_MAX_RETRIES` | `2` | From `0` through `10` |
+| `LLM_MAX_TOKENS` | `4096` | Positive output-token limit |
+| `OPENAI_REASONING_EFFORT` | `low` | `none`, `low`, `medium`, `high`, `xhigh`, or `max` |
+| `OPENAI_API_KEY` | unset | Required when an OpenAI request is made |
+| `ANTHROPIC_API_KEY` | unset | Required when an Anthropic request is made |
+| `OPENAI_BASE_URL` | unset | Optional trusted OpenAI-compatible endpoint |
+
+| Setting | Default | Purpose and validation |
+| --- | --- | --- |
+| `OBSERVABILITY_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, or `ERROR`; production rejects `DEBUG` |
+| `OBSERVABILITY_JSON_LOGS` | `true` | Emit structured JSON instead of console text |
+| `OTEL_ENABLED` | `false` | Enable OpenTelemetry tracing and metrics |
+| `OTEL_SERVICE_NAME` | `data-agent` | Telemetry service name, 1–128 characters |
+| `OTEL_EXPORTER_ENDPOINT` | unset | Required trace endpoint when telemetry is enabled |
+| `OTEL_METRICS_EXPORTER_ENDPOINT` | derived | Optional metrics endpoint; otherwise derived from the trace endpoint |
+| `OTEL_EXPORT_TIMEOUT_SECONDS` | `10` | Positive value, at most `60` seconds |
+| `OTEL_METRIC_EXPORT_INTERVAL_SECONDS` | `60` | From `5` through `300` seconds |
+| `OTEL_TRACE_SAMPLE_RATIO` | `1` | Trace fraction from `0` through `1` |
+| `OTEL_EXCLUDED_URLS` | `/health` | FastAPI instrumentation exclusion pattern |
+
+| Setting | Default | Purpose and validation |
+| --- | --- | --- |
+| `API_HOST` | `127.0.0.1` | Bind address |
+| `API_PORT` | `8000` | From `1` through `65535` |
+| `API_WORKERS` | `1` | From `1` through `32` |
+| `API_RELOAD` | `false` | Requires one worker; forbidden in staging and production |
+| `API_DOCS_ENABLED` | environment-dependent | Enabled except in production unless explicitly overridden |
+| `API_AUTH_ENABLED` | environment-dependent | Enabled and mandatory in production; disabled elsewhere by default |
+| `API_KEYS` | unset | Comma-separated bearer keys; each must have at least 32 characters when authentication is enabled |
+| `API_RATE_LIMIT_REQUESTS` | `60` | Per-key requests per window, from `1` through `100000` |
+| `API_RATE_LIMIT_WINDOW_SECONDS` | `60` | From `1` through `3600` seconds |
+| `API_MAX_CONCURRENT_REQUESTS` | `4` | Process-local workflow limit, from `1` through `1000` |
+| `API_GRACEFUL_SHUTDOWN_SECONDS` | `30` | Drain timeout, from `1` through `300` seconds |
+| `API_READINESS_DATABASE_ENABLED` | `false` | Include PostgreSQL in readiness; requires `DATABASE_URL` |
+| `API_READINESS_TIMEOUT_SECONDS` | `3` | Positive readiness timeout, at most `30` seconds |
+| `API_MAX_REQUEST_BYTES` | `16384` | Request-body limit, from `1024` through `1048576` bytes |
+
+| Setting | Default | Purpose and validation |
+| --- | --- | --- |
+| `DATABASE_URL` | unset | PostgreSQL URL; required for SQL operations and optional database readiness |
+| `DATABASE_SCHEMA` | `public` | SQL identifier used for schema discovery |
+| `SQL_ROW_LIMIT` | `10` | Prompted result limit, from `1` through `100000` |
+| `SQL_TIMEOUT_SECONDS` | `30` | Execution timeout, positive and at most `300` seconds |
+| `SQL_CATEGORICAL_COLUMNS` | documented below | JSON object containing validated table and column identifiers |
+| `SQL_CATEGORICAL_VALUE_LIMIT` | `50` | Distinct values per configured column, from `1` through `200` |
+| `ETL_TIMEOUT_SECONDS` | `30` | HTTP timeout, positive and at most `120` seconds |
+| `ETL_MAX_RETRIES` | `2` | From `0` through `5` |
+| `ETL_MAX_PAGES` | `20` | From `1` through `100` |
+| `ETL_MAX_ROWS` | `100000` | From `1` through `1000000` |
+| `ETL_AUTH_ORIGIN` | empty | Exact allowed HTTPS origin for ETL bearer authentication |
+| `ETL_BEARER_TOKEN` | unset | Optional ETL source bearer credential |
 
 The API server is configured with `API_HOST`, `API_PORT`, `API_WORKERS`, and
 `API_RELOAD`. Reload cannot be combined with multiple workers and is rejected
@@ -368,7 +439,7 @@ then start the non-root container:
 
 ```powershell
 docker run --rm --name data-agent `
-  --publish 8000:8000 `
+  --publish 8015:8015 `
   --env-file .env.production `
   data-agent:local
 ```
@@ -398,8 +469,54 @@ API_READINESS_TIMEOUT_SECONDS=3
 ```
 
 The writable `/app/data/extract` and `/app/data/transform` directories belong
-to the non-root runtime user. Mount durable storage at `/app/data` when ETL
-outputs must survive container replacement.
+to the non-root runtime user. Mount those directories separately when ETL
+outputs must survive container replacement so the packaged seed data remains
+available.
+
+### Compose stack
+
+The included Compose stack starts PostgreSQL, runs migrations once, starts an
+OpenTelemetry Collector, and admits API traffic only after the database is
+healthy and migrations succeed. Create the local runtime settings first:
+
+```powershell
+Copy-Item .env.compose.example .env.compose
+```
+
+Replace `POSTGRES_PASSWORD` and `API_KEYS` in `.env.compose`, add the API key
+for the selected LLM provider, and start the stack:
+
+```powershell
+docker compose --env-file .env.compose up --build --detach
+docker compose ps
+```
+
+With the supplied Compose settings, the API is available at
+`http://localhost:8015` and PostgreSQL at `localhost:5445`. Send the value from
+`API_KEYS` as a bearer token. The API and migration containers continue to use
+PostgreSQL port `5432` inside the Compose network. The collector is reachable
+only inside that network; inspect locally exported telemetry with:
+
+```powershell
+docker compose logs --follow otel-collector
+```
+
+Interactive API documentation is enabled for this local stack at
+`http://localhost:8015/docs`. Disable it for an externally exposed deployment
+by setting `API_DOCS_ENABLED=false`.
+
+Stop containers without deleting database or ETL data using
+`docker compose down`. Running `docker compose down --volumes` also deletes all
+three named data volumes and should only be used when a full reset is intended.
+
+Compose forces production-safe internal values for `APP_ENVIRONMENT`,
+`API_HOST`, `API_PORT`, database readiness, `DATABASE_URL`, and the two OTLP
+endpoints. Compose-only variables are `POSTGRES_DB`, `POSTGRES_USER`,
+`POSTGRES_PASSWORD`, `POSTGRES_HOST_PORT`, `API_HOST_PORT`,
+`API_STOP_GRACE_PERIOD`, `DATA_AGENT_TAG`, and `COMPOSE_ENV_FILE`; they configure
+orchestration and are not application settings. `POSTGRES_HOST_PORT` and
+`API_HOST_PORT` change host ports while the containers continue listening on
+ports `5432` and `8000`, respectively.
 
 ### Python
 
@@ -501,6 +618,9 @@ vehicles. Alembic creates the tables and loads the supplied CSV seed data.
 
 ```text
 data_agent/
+├── docs/                    # Product, architecture, design, and database documents
+├── docker/
+│   └── otel-collector.yaml # Local OTLP collector pipeline
 ├── data/
 │   ├── extract/            # API extraction output
 │   └── transform/          # Transformation output
@@ -516,7 +636,10 @@ data_agent/
 │       ├── cli.py          # One-shot command-line interface
 │       └── config.py       # Validated settings
 ├── tests/                  # Automated offline tests
+├── .env.compose.example    # Compose runtime settings template
 ├── .env.example            # Configuration template
+├── compose.yaml            # Production-style local service stack
+├── Dockerfile              # Multi-stage non-root application image
 ├── MANIFEST.in             # Source-distribution asset manifest
 ├── alembic.ini             # Alembic configuration
 ├── pyproject.toml          # Project and test configuration
@@ -590,9 +713,10 @@ Python 3.13. Coverage measures branches as well as statements and requires at
 least 85% across the application modules. Direct-execution demonstration blocks
 are excluded from coverage.
 
-The `.github/workflows/quality.yml` workflow installs the locked environment
-and runs all three gates for every push and pull request. The job has read-only
-repository permissions and a 15-minute timeout.
+The `.github/workflows/quality.yml` workflow installs the locked environment,
+runs all three Python gates, builds distributions, validates `compose.yaml`,
+and builds the production image for every push and pull request. The job has
+read-only repository permissions and a 15-minute timeout.
 
 ## Graph images
 

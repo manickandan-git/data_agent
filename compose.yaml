@@ -1,0 +1,76 @@
+x-data-agent-image: &data-agent-image
+  image: data-agent:${DATA_AGENT_TAG:-local}
+  build:
+    context: .
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-data_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-data_agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.compose}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5445}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  migrate:
+    <<: *data-agent-image
+    command: ["alembic", "upgrade", "head"]
+    env_file:
+      - ${COMPOSE_ENV_FILE:-.env.compose}
+    environment:
+      APP_ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-data_agent}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.compose}@postgres:5432/${POSTGRES_DB:-data_agent}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.160.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./docker/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    restart: unless-stopped
+
+  api:
+    <<: *data-agent-image
+    env_file:
+      - ${COMPOSE_ENV_FILE:-.env.compose}
+    environment:
+      APP_ENVIRONMENT: production
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_READINESS_DATABASE_ENABLED: "true"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-data_agent}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.compose}@postgres:5432/${POSTGRES_DB:-data_agent}
+      OTEL_ENABLED: "true"
+      OTEL_EXPORTER_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_METRICS_EXPORTER_ENDPOINT: http://otel-collector:4318/v1/metrics
+    ports:
+      - "${API_HOST_PORT:-8000}:8000"
+    volumes:
+      - extract-data:/app/data/extract
+      - transform-data:/app/data/transform
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+    stop_grace_period: ${API_STOP_GRACE_PERIOD:-45s}
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  extract-data:
+  transform-data:

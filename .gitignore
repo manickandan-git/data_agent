@@ -11,6 +11,7 @@ wheels/
 .env
 .env.*
 !.env.example
+!.env.compose.example
 .pytest-tmp/
 .coverage
 coverage.xml

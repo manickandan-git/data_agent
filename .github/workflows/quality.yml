@@ -20,7 +20,7 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
-          - 5432:5432
+          - 5445:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d data_agent_test"
           --health-interval 5s
@@ -50,11 +50,16 @@ jobs:
 
       - name: Test with coverage
         env:
-          MIGRATION_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/data_agent_test
+          MIGRATION_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5445/data_agent_test
         run: uv run pytest --cov --cov-report=term-missing
 
       - name: Build wheel and source distribution
         run: uv build
+
+      - name: Validate Compose configuration
+        env:
+          COMPOSE_ENV_FILE: .env.compose.example
+        run: docker compose --env-file .env.compose.example config --quiet
 
       - name: Build production container
         run: docker build --tag data-agent:ci .
