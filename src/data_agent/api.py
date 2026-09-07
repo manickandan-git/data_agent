@@ -3,6 +3,7 @@
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
+import asyncpg
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, Security, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
@@ -48,7 +49,31 @@ def _default_workflow():
     return data_analyst
 
 
-def create_app(workflow=None, settings=None, *, span_exporter=None, metric_reader=None) -> FastAPI:
+async def _database_readiness(settings) -> None:
+    database_url = settings.require_database_url().replace(
+        "postgresql+asyncpg://", "postgresql://", 1
+    )
+    connection = await asyncpg.connect(
+        database_url,
+        timeout=settings.api_readiness_timeout_seconds,
+    )
+    try:
+        await connection.fetchval(
+            "SELECT 1",
+            timeout=settings.api_readiness_timeout_seconds,
+        )
+    finally:
+        await connection.close(timeout=settings.api_readiness_timeout_seconds)
+
+
+def create_app(
+    workflow=None,
+    settings=None,
+    *,
+    span_exporter=None,
+    metric_reader=None,
+    readiness_check=None,
+) -> FastAPI:
     """Build an API app; an injected workflow keeps endpoint tests offline."""
 
     def current_settings():
@@ -62,9 +87,14 @@ def create_app(workflow=None, settings=None, *, span_exporter=None, metric_reade
             json_logs=active_settings.observability_json_logs,
         )
         telemetry_provider = getattr(_app.state, "telemetry_provider", None)
+        _app.state.accepting_requests = True
         try:
             yield
         finally:
+            _app.state.accepting_requests = False
+            await _app.state.concurrency_limiter.wait_for_idle(
+                active_settings.api_graceful_shutdown_seconds
+            )
             if telemetry_provider is not None:
                 telemetry_provider.shutdown()
 
@@ -90,6 +120,7 @@ def create_app(workflow=None, settings=None, *, span_exporter=None, metric_reade
     )
     concurrency_limiter = ConcurrencyLimiter(active_settings.api_max_concurrent_requests)
     application.state.concurrency_limiter = concurrency_limiter
+    application.state.accepting_requests = False
     bearer = HTTPBearer(auto_error=False)
 
     async def authorize_and_limit(
@@ -145,6 +176,28 @@ def create_app(workflow=None, settings=None, *, span_exporter=None, metric_reade
 
     @application.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
+        return HealthResponse()
+
+    @application.get("/health/live", response_model=HealthResponse)
+    async def health_live() -> HealthResponse:
+        return HealthResponse()
+
+    @application.get("/health/ready", response_model=HealthResponse)
+    async def health_ready(request: Request) -> HealthResponse:
+        if not request.app.state.accepting_requests:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="The service is not ready.",
+            )
+        if active_settings.api_readiness_database_enabled:
+            check = readiness_check or _database_readiness
+            try:
+                await check(active_settings)
+            except (asyncpg.PostgresError, OSError, TimeoutError, ValueError):
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="The service is not ready.",
+                ) from None
         return HealthResponse()
 
     @application.post("/api/v1/query", response_model=QueryResponse)
@@ -213,4 +266,5 @@ def run() -> None:
         port=settings.api_port,
         workers=settings.api_workers,
         reload=settings.api_reload,
+        timeout_graceful_shutdown=settings.api_graceful_shutdown_seconds,
     )

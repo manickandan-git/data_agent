@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     api_rate_limit_requests: int = Field(default=60, ge=1, le=100_000)
     api_rate_limit_window_seconds: float = Field(default=60, ge=1, le=3_600)
     api_max_concurrent_requests: int = Field(default=4, ge=1, le=1_000)
+    api_graceful_shutdown_seconds: float = Field(default=30, ge=1, le=300)
+    api_readiness_database_enabled: bool = False
+    api_readiness_timeout_seconds: float = Field(default=3, gt=0, le=30)
     api_max_request_bytes: int = Field(default=16_384, ge=1_024, le=1_048_576)
     database_url: SecretStr | None = None
     database_schema: str = Field(default="public", pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -131,6 +134,8 @@ class Settings(BaseSettings):
                 raise ValueError("API_KEYS is required when API authentication is enabled.")
             if any(len(key) < 32 for key in keys):
                 raise ValueError("Every API key must contain at least 32 characters.")
+        if self.api_readiness_database_enabled and not self.database_url:
+            raise ValueError("DATABASE_URL is required when API_READINESS_DATABASE_ENABLED=true.")
         return self
 
     def configured_api_keys(self) -> tuple[str, ...]:

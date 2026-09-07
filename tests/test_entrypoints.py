@@ -67,6 +67,7 @@ def test_api_console_entrypoint_binds_to_localhost(monkeypatch):
             api_port=9000,
             api_workers=3,
             api_reload=False,
+            api_graceful_shutdown_seconds=30,
         ),
     )
 
@@ -78,4 +79,5 @@ def test_api_console_entrypoint_binds_to_localhost(monkeypatch):
         port=9000,
         workers=3,
         reload=False,
+        timeout_graceful_shutdown=30,
     )

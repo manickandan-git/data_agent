@@ -58,15 +58,27 @@ class ConcurrencyLimiter:
         self.limit = limit
         self._active = 0
         self._lock = asyncio.Lock()
+        self._idle = asyncio.Event()
+        self._idle.set()
 
     async def try_acquire(self) -> bool:
         async with self._lock:
             if self._active >= self.limit:
                 return False
             self._active += 1
+            self._idle.clear()
             return True
 
     async def release(self) -> None:
         async with self._lock:
             if self._active > 0:
                 self._active -= 1
+            if self._active == 0:
+                self._idle.set()
+
+    async def wait_for_idle(self, timeout_seconds: float) -> bool:
+        try:
+            await asyncio.wait_for(self._idle.wait(), timeout=timeout_seconds)
+        except TimeoutError:
+            return False
+        return True

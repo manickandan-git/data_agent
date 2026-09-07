@@ -68,6 +68,8 @@ def test_secrets_are_redacted(settings_factory):
         ("app_environment", "local"),
         ("api_port", 0),
         ("api_workers", 0),
+        ("api_graceful_shutdown_seconds", 0),
+        ("api_readiness_timeout_seconds", 0),
         ("otel_trace_sample_ratio", 1.1),
         ("sql_categorical_columns", {"payments; DROP": ["payment_method"]}),
         ("sql_categorical_columns", {"payments": ["payment_method", "payment_method"]}),
@@ -178,6 +180,8 @@ def test_environment_safety_defaults_and_validation(settings_factory):
         settings_factory(app_environment="production", api_auth_enabled=False)
     with pytest.raises(ValidationError, match="at least 32"):
         settings_factory(api_auth_enabled=True, api_keys="too-short")
+    with pytest.raises(ValidationError, match="DATABASE_URL"):
+        settings_factory(api_readiness_database_enabled=True)
 
 
 def test_api_keys_are_redacted_and_normalized(settings_factory):

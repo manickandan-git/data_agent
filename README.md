@@ -321,6 +321,12 @@ Interactive OpenAPI documentation is available at
 GET /health
 ```
 
+`GET /health/live` is the explicit liveness endpoint. `GET /health/ready`
+reports whether startup completed and the process is accepting work. Enable
+`API_READINESS_DATABASE_ENABLED=true` to require a successful bounded
+PostgreSQL `SELECT 1` before readiness succeeds. Database failure details are
+never returned to callers.
+
 Submit a question with:
 
 ```http
@@ -349,9 +355,51 @@ Invalid models return HTTP 422, oversized bodies return HTTP 413, and workflow
 errors return HTTP 500 with safe details. Request bodies default to a 16 KiB
 limit controlled by `API_MAX_REQUEST_BYTES`.
 
-Authentication and rate limiting are not implemented yet. Keep the service
-bound to localhost or behind an authenticated gateway until those controls are
-added.
+### Production container
+
+Build the multi-stage image from the repository root:
+
+```powershell
+docker build --tag data-agent:local .
+```
+
+Create a production environment file containing runtime secrets and settings,
+then start the non-root container:
+
+```powershell
+docker run --rm --name data-agent `
+  --publish 8000:8000 `
+  --env-file .env.production `
+  data-agent:local
+```
+
+At minimum, production requires `API_KEYS` and the selected LLM provider key.
+Provide `DATABASE_URL` when SQL requests or database readiness are enabled.
+Secrets are supplied at runtime and `.dockerignore` prevents local `.env` files
+from entering the build context.
+
+The image runs as UID/GID `10001`, installs frozen production dependencies in a
+builder stage, and contains no development dependency set. It includes Alembic
+and the baseline CSV files so migrations can be run using the same image:
+
+```powershell
+docker run --rm --env-file .env.production data-agent:local alembic upgrade head
+```
+
+Docker probes `/health/live`; orchestration platforms should use
+`/health/ready` for traffic admission. During shutdown the application becomes
+unready, waits up to `API_GRACEFUL_SHUTDOWN_SECONDS` for active workflows, and
+then flushes telemetry. Relevant settings are:
+
+```dotenv
+API_GRACEFUL_SHUTDOWN_SECONDS=30
+API_READINESS_DATABASE_ENABLED=true
+API_READINESS_TIMEOUT_SECONDS=3
+```
+
+The writable `/app/data/extract` and `/app/data/transform` directories belong
+to the non-root runtime user. Mount durable storage at `/app/data` when ETL
+outputs must survive container replacement.
 
 ### Python
 

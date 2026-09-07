@@ -45,3 +45,13 @@ def test_concurrency_limiter_rejects_and_releases_capacity():
     assert run(limiter.try_acquire()) is True
     run(limiter.release())
     run(limiter.release())
+
+
+def test_concurrency_limiter_reports_idle_and_shutdown_timeout():
+    limiter = ConcurrencyLimiter(1)
+    assert run(limiter.wait_for_idle(0.01)) is True
+
+    assert run(limiter.try_acquire()) is True
+    assert run(limiter.wait_for_idle(0.01)) is False
+    run(limiter.release())
+    assert run(limiter.wait_for_idle(0.01)) is True

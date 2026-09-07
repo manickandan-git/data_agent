@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 from fastapi.testclient import TestClient
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
@@ -14,9 +14,46 @@ def test_health_endpoint():
 
     with TestClient(app) as client:
         response = client.get("/health")
+        live = client.get("/health/live")
+        ready = client.get("/health/ready")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+    assert live.status_code == 200
+    assert ready.status_code == 200
+
+
+def test_readiness_checks_database_when_enabled():
+    check = AsyncMock()
+    settings = Settings(
+        _env_file=None,
+        database_url="postgresql://test",
+        api_readiness_database_enabled=True,
+    )
+    app = create_app(workflow=Mock(), settings=settings, readiness_check=check)
+
+    with TestClient(app) as client:
+        response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    check.assert_awaited_once_with(settings)
+
+
+def test_readiness_hides_database_failure_details():
+    check = AsyncMock(side_effect=OSError("database password leaked"))
+    settings = Settings(
+        _env_file=None,
+        database_url="postgresql://test",
+        api_readiness_database_enabled=True,
+    )
+    app = create_app(workflow=Mock(), settings=settings, readiness_check=check)
+
+    with TestClient(app) as client:
+        response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "The service is not ready."}
+    assert "password" not in response.text
 
 
 def test_production_disables_interactive_api_documentation_by_default():
@@ -201,11 +238,11 @@ def test_query_concurrency_limit_rejects_without_queueing():
     app = create_app(workflow=Mock(), settings=settings)
     assert asyncio.run(app.state.concurrency_limiter.try_acquire()) is True
 
-    try:
-        with TestClient(app) as client:
+    with TestClient(app) as client:
+        try:
             response = client.post("/api/v1/query", json={"question": "hello"})
-    finally:
-        asyncio.run(app.state.concurrency_limiter.release())
+        finally:
+            asyncio.run(app.state.concurrency_limiter.release())
 
     assert response.status_code == 503
     assert response.headers["retry-after"] == "1"
