@@ -40,7 +40,8 @@ and `workflow_error`.
 ### Database
 
 - Protocol: PostgreSQL through `asyncpg`.
-- Application URL: `DATABASE_URL`.
+- Application URL: `DATABASE_URL`, constructed with the read-only application
+  role in Compose.
 - Container endpoint: `postgres:5432`; local host endpoint: `localhost:5445`.
 - Schema discovery: `information_schema` scoped to `DATABASE_SCHEMA`.
 - Query execution: one read-only transaction with `SQL_TIMEOUT_SECONDS`.
@@ -129,13 +130,15 @@ runs as a non-root user and contains application code, Alembic migrations, and
 seed files. Compose provides:
 
 - `postgres`: durable database with health checking and host port `5445`.
-- `migrate`: one-time `alembic upgrade head` job.
+- `bootstrap-db-roles`: one-time idempotent creation/grant job using the
+  administrator identity.
+- `migrate`: one-time `alembic upgrade head` job using the schema-owner role.
 - `otel-collector`: internal OTLP receiver with debug export.
-- `api`: health-checked service on host port `8015`.
+- `api`: health-checked service on host port `8015` using the read-only role.
 
-Startup order is PostgreSQL healthy → migration succeeds → API starts. Shutdown
-marks the API unready, waits for active workflows up to the configured drain
-timeout, then closes telemetry.
+Startup order is PostgreSQL healthy → role bootstrap succeeds → migration
+succeeds → API starts. Shutdown marks the API unready, waits for active
+workflows up to the configured drain timeout, then closes telemetry.
 
 ## 7. Scalability model
 

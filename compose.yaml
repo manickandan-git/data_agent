@@ -22,6 +22,25 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  bootstrap-db-roles:
+    image: postgres:17-bookworm
+    entrypoint: ["/bin/sh", "/opt/data-agent/bootstrap-roles.sh"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-data_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-data_agent_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.compose}
+      POSTGRES_MIGRATION_USER: ${POSTGRES_MIGRATION_USER:-data_agent_migrator}
+      POSTGRES_MIGRATION_PASSWORD: ${POSTGRES_MIGRATION_PASSWORD:?Set POSTGRES_MIGRATION_PASSWORD in .env.compose}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-data_agent_reader}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env.compose}
+    volumes:
+      - ./docker/postgres/bootstrap-roles.sh:/opt/data-agent/bootstrap-roles.sh:ro
+      - ./docker/postgres/verify-read-only-role.sh:/opt/data-agent/verify-read-only-role.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   migrate:
     <<: *data-agent-image
     command: ["alembic", "upgrade", "head"]
@@ -29,10 +48,10 @@ services:
       - ${COMPOSE_ENV_FILE:-.env.compose}
     environment:
       APP_ENVIRONMENT: production
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-data_agent}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.compose}@postgres:5432/${POSTGRES_DB:-data_agent}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_MIGRATION_USER:-data_agent_migrator}:${POSTGRES_MIGRATION_PASSWORD:?Set POSTGRES_MIGRATION_PASSWORD in .env.compose}@postgres:5432/${POSTGRES_DB:-data_agent}
     depends_on:
-      postgres:
-        condition: service_healthy
+      bootstrap-db-roles:
+        condition: service_completed_successfully
     restart: "no"
 
   otel-collector:
@@ -51,7 +70,7 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: 8000
       API_READINESS_DATABASE_ENABLED: "true"
-      DATABASE_URL: postgresql://${POSTGRES_USER:-data_agent}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.compose}@postgres:5432/${POSTGRES_DB:-data_agent}
+      DATABASE_URL: postgresql://${POSTGRES_APP_USER:-data_agent_reader}:${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env.compose}@postgres:5432/${POSTGRES_DB:-data_agent}
       OTEL_ENABLED: "true"
       OTEL_EXPORTER_ENDPOINT: http://otel-collector:4318/v1/traces
       OTEL_METRICS_EXPORTER_ENDPOINT: http://otel-collector:4318/v1/metrics

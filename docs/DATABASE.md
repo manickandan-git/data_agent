@@ -212,10 +212,25 @@ from the bounded metadata must not automatically be treated as impossible.
 | `a86b191887cf` | Load baseline CSV data for all tables |
 
 Migrations resolve seed CSV files from the repository/container `data`
-directory. Compose runs `alembic upgrade head` after PostgreSQL becomes healthy
-and before the API starts.
+directory. Compose configures separate migration and read-only roles after
+PostgreSQL becomes healthy, then runs `alembic upgrade head` before the API
+starts.
 
-## 7. Migration policy
+## 7. Database roles
+
+| Role | Compose setting | Capability |
+| --- | --- | --- |
+| Administrator | `POSTGRES_USER` | Initializes PostgreSQL and creates/updates the two restricted roles; not supplied to the API or migration job |
+| Migration owner | `POSTGRES_MIGRATION_USER` | Owns `public`, tables, and sequences; has schema creation privileges and runs Alembic |
+| Application reader | `POSTGRES_APP_USER` | Can connect, use `public`, and select current/future tables and sequences; defaults to read-only transactions |
+
+The bootstrap job is idempotent and supports an existing volume by transferring
+current public tables and sequences to the migration owner. Existing deployments
+must retain the administrator username/password originally used to initialize
+the volume. All role names and passwords must be distinct, long, and URL-safe
+because Compose constructs database URLs from them.
+
+## 8. Migration policy
 
 - Use Alembic for every production schema change.
 - Commit the ORM change, reviewed migration, tests, and this document together.
@@ -226,11 +241,12 @@ and before the API starts.
   `test`; its downgrade verification drops application tables.
 - Do not change or delete an applied revision; add a new forward migration.
 
-## 8. Access and safety recommendations
+## 9. Access and safety recommendations
 
-- Give the application a PostgreSQL role with only `CONNECT`, `USAGE`, and
-  required `SELECT` privileges.
-- Use a separate, more privileged role for Alembic migrations.
+- Keep the administrator, migration, and application credentials in a secret
+  manager outside local development.
+- Audit role grants after schema migrations and retain automated negative tests
+  proving that the application role cannot write.
 - Keep PostgreSQL host port `5445` limited to trusted development machines; do
   not expose it publicly.
 - Use TLS and managed secret injection outside the local Compose environment.

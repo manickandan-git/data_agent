@@ -483,8 +483,12 @@ healthy and migrations succeed. Create the local runtime settings first:
 Copy-Item .env.compose.example .env.compose
 ```
 
-Replace `POSTGRES_PASSWORD` and `API_KEYS` in `.env.compose`, add the API key
-for the selected LLM provider, and start the stack:
+Replace the administrator, migration, application, API, and selected LLM
+provider password/key placeholders in `.env.compose`. All three PostgreSQL
+usernames and passwords must be distinct. For an existing database volume,
+keep its current `POSTGRES_USER` and `POSTGRES_PASSWORD`; add the new migration
+and application credentials without renaming the existing administrator. Then
+start the stack:
 
 ```powershell
 docker compose --env-file .env.compose up --build --detach
@@ -494,11 +498,23 @@ docker compose ps
 With the supplied Compose settings, the API is available at
 `http://localhost:8015` and PostgreSQL at `localhost:5445`. Send the value from
 `API_KEYS` as a bearer token. The API and migration containers continue to use
-PostgreSQL port `5432` inside the Compose network. The collector is reachable
-only inside that network; inspect locally exported telemetry with:
+PostgreSQL port `5432` inside the Compose network. A one-time bootstrap service
+creates or updates the migration and application roles. Alembic connects as the
+migration owner, while the API connects as a role restricted to `SELECT` and
+database-enforced read-only transactions. The collector is reachable only
+inside that network; inspect locally exported telemetry with:
 
 ```powershell
 docker compose logs --follow otel-collector
+```
+
+Verify the effective application database privileges without displaying its
+password:
+
+```powershell
+docker compose --env-file .env.compose run --rm --no-deps `
+  --entrypoint /bin/sh bootstrap-db-roles `
+  /opt/data-agent/verify-read-only-role.sh
 ```
 
 Interactive API documentation is enabled for this local stack at
@@ -512,11 +528,14 @@ three named data volumes and should only be used when a full reset is intended.
 Compose forces production-safe internal values for `APP_ENVIRONMENT`,
 `API_HOST`, `API_PORT`, database readiness, `DATABASE_URL`, and the two OTLP
 endpoints. Compose-only variables are `POSTGRES_DB`, `POSTGRES_USER`,
-`POSTGRES_PASSWORD`, `POSTGRES_HOST_PORT`, `API_HOST_PORT`,
-`API_STOP_GRACE_PERIOD`, `DATA_AGENT_TAG`, and `COMPOSE_ENV_FILE`; they configure
-orchestration and are not application settings. `POSTGRES_HOST_PORT` and
-`API_HOST_PORT` change host ports while the containers continue listening on
-ports `5432` and `8000`, respectively.
+`POSTGRES_PASSWORD`, `POSTGRES_MIGRATION_USER`,
+`POSTGRES_MIGRATION_PASSWORD`, `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`,
+`POSTGRES_HOST_PORT`, `API_HOST_PORT`, `API_STOP_GRACE_PERIOD`, `DATA_AGENT_TAG`,
+and `COMPOSE_ENV_FILE`; they configure orchestration and are not application
+settings. `POSTGRES_USER` is the administrator used only for role bootstrap;
+do not use it as the API identity. `POSTGRES_HOST_PORT` and `API_HOST_PORT`
+change host ports while the containers continue listening on ports `5432` and
+`8000`, respectively.
 
 ### Python
 
@@ -620,6 +639,7 @@ vehicles. Alembic creates the tables and loads the supplied CSV seed data.
 data_agent/
 ├── docs/                    # Product, architecture, design, and database documents
 ├── docker/
+│   ├── postgres/            # Least-privilege role bootstrap
 │   └── otel-collector.yaml # Local OTLP collector pipeline
 ├── data/
 │   ├── extract/            # API extraction output

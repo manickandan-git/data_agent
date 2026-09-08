@@ -131,6 +131,20 @@ Validation runs before the LLM judge and again immediately before execution.
 `execute_read_only_sql` executes through asyncpg inside
 `connection.transaction(readonly=True)` with the configured timeout.
 
+In Compose, defense in depth is provided by separate PostgreSQL identities:
+
+- `POSTGRES_USER` is the existing database administrator and is available only
+  to the role-bootstrap service.
+- `POSTGRES_MIGRATION_USER` owns the `public` schema and its tables/sequences and
+  is used only by Alembic.
+- `POSTGRES_APP_USER` receives `CONNECT`, schema `USAGE`, and `SELECT` on current
+  and future tables/sequences. Its database-specific
+  `default_transaction_read_only` setting is enabled.
+
+The idempotent bootstrap script rejects duplicate role names, removes public
+schema creation from `PUBLIC`, transfers existing objects to the migration
+owner, and refreshes role passwords/grants on each Compose reconciliation.
+
 ## 6. ETL implementation
 
 ### Extraction algorithm

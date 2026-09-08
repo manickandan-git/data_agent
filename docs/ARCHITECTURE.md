@@ -16,7 +16,8 @@ flowchart LR
     Router --> ETL[ETL analyst graph]
     SQL --> LLM[LLM provider]
     ETL --> LLM
-    SQL --> DB[(PostgreSQL)]
+    SQL -->|read-only application role| DB[(PostgreSQL)]
+    Migrations[Alembic migration job] -->|schema-owner role| DB
     ETL --> HTTPS[HTTPS JSON API]
     ETL --> Files[(Bounded data volumes)]
     API --> OTEL[OpenTelemetry Collector]
@@ -99,23 +100,28 @@ origin.
 
 ## 5. Deployment architecture
 
-The local production-style topology consists of four Compose services:
+The local production-style topology consists of five Compose services:
 
 ```mermaid
 flowchart LR
     HostAPI[Host :8015] --> API[API :8000]
     HostDB[Host :5445] --> PG[(PostgreSQL :5432)]
-    Migrate[One-time Alembic migration] --> PG
-    API --> PG
+    Bootstrap[Role bootstrap as administrator] --> PG
+    Bootstrap --> Migrate[One-time Alembic migration owner]
+    Migrate --> PG
+    API[API read-only role] --> PG
     API --> Collector[OTel Collector :4318]
     PG --- PGVol[(postgres-data)]
     API --- Extract[(extract-data)]
     API --- Transform[(transform-data)]
 ```
 
-PostgreSQL health gates migrations, and successful migration completion gates
-the API. The API runs as UID/GID `10001`, has a container liveness probe, and
-uses a stop grace period longer than the application drain timeout.
+PostgreSQL health gates role bootstrap, bootstrap success gates migrations, and
+successful migration completion gates the API. The administrator credential is
+used only by bootstrap, Alembic owns schema objects through a migration role,
+and the API receives a separate `SELECT`-only role whose default transactions
+are read-only. The API runs as UID/GID `10001`, has a container liveness probe,
+and uses a stop grace period longer than the application drain timeout.
 
 ## 6. Quality attributes
 
@@ -125,7 +131,7 @@ uses a stop grace period longer than the application drain timeout.
 - Keys are hashed before comparison and limiter bucketing and compared in
   constant time.
 - SQL has deterministic application checks plus a database read-only
-  transaction.
+  transaction and a least-privilege read-only login.
 - ETL prevents path traversal, overwrite, credential leakage, redirects, and
   cross-origin pagination.
 - Images exclude local environment files and run without root privileges.
