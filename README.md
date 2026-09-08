@@ -8,7 +8,8 @@ It uses LangChain-compatible chat models, Pydantic structured outputs,
 SQLAlchemy models, Alembic migrations, and pandas-based ETL operations.
 
 Product requirements and engineering designs are maintained in the
-[`docs`](docs/README.md) directory.
+[`docs`](docs/README.md) directory. Deferred production work is tracked in the
+[production hardening roadmap](docs/PRODUCTION_ROADMAP.md).
 
 ## Features
 

@@ -11,6 +11,7 @@ documents and code disagree.
 | [High-level design](HLD.md) | Major components, interfaces, workflows, and deployment topology |
 | [Low-level design](LLD.md) | Modules, state transitions, validation rules, and implementation contracts |
 | [Database design](DATABASE.md) | Relational model, data dictionary, constraints, indexes, and migration policy |
+| [Production hardening roadmap](PRODUCTION_ROADMAP.md) | Deferred production initiatives, sequence, tasks, and acceptance criteria |
 
 ## Document ownership
 
@@ -20,5 +21,7 @@ documents and code disagree.
 - Module interfaces, workflow states, algorithms, and error behavior should
   update `LLD.md`.
 - ORM or migration changes should update `DATABASE.md` in the same change set.
+- Deferred production work and completion evidence should update
+  `PRODUCTION_ROADMAP.md`.
 
 Last reviewed against the implementation: 2026-09-07.
